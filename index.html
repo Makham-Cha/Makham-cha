@@ -15,7 +15,7 @@
       <div class="subtitle">Matcha Made with Love</div>
       <div class="hero-note">เลือกสินค้า • ระบุข้อมูล • ส่งออเดอร์ทาง LINE OA</div>
     </header>
-    <section id="product" class="product-card" aria-live="polite"></section>
+    <section id="product" class="product-card product-detail" aria-live="polite"></section>
     <section class="menu-section">
       <div class="section-title">เมนูมัทฉะ</div>
       <div id="menu" class="menu-grid"></div>
@@ -26,6 +26,9 @@
         <div class="form-grid">
           <label>ชื่อเล่น <span>*</span><input id="nickname" type="text" maxlength="50" placeholder="เช่น นนท์" autocomplete="name"></label>
           <label>เบอร์ติดต่อ <span>*</span><input id="phone" type="tel" maxlength="20" placeholder="08x-xxx-xxxx" autocomplete="tel"></label>
+        </div>
+        <div class="comment-field">
+          <label>รายละเอียดเพิ่มเติม <textarea id="comment" maxlength="300" rows="3" placeholder="เช่น ขอแยกน้ำแข็ง / เพิ่มรายละเอียดอื่น ๆ"></textarea></label>
         </div>
         <div class="location-box">
           <div><strong>📍 ตำแหน่งจัดส่ง</strong><div id="locationStatus" class="location-status">ยังไม่ได้ระบุตำแหน่ง</div></div>
@@ -40,6 +43,7 @@
     </section>
     <footer><div>MAKHAM CHA</div><div>Matcha Made with Love</div></footer>
   </main>
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

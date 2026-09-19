@@ -33,3 +33,18 @@ footer{text-align:center;font-size:12px;opacity:.6;padding:24px 16px}
 .add-row{display:grid;grid-template-columns:92px 1fr;gap:8px;margin-top:8px}
 .add-row input{margin-top:0;text-align:center}
 @media (max-width:480px){.add-row{grid-template-columns:82px 1fr}}
+
+/* Premium UI additions */
+textarea{width:100%;margin-top:6px;border:1px solid #d5ded0;border-radius:11px;padding:11px 12px;background:#fff;color:var(--dark);outline:none;resize:vertical;font:inherit}
+textarea:focus{border-color:var(--green);box-shadow:0 0 0 3px #789a6322}
+.product-detail:empty{display:none}
+.menu-item{transition:transform .18s ease,box-shadow .18s ease,border-color .18s ease}
+.menu-item:hover,.menu-item:focus-visible{transform:translateY(-3px);box-shadow:0 10px 22px rgba(48,69,42,.12);border-color:#b9cdb0}
+.menu-item:focus-visible,.add-btn:focus-visible,.order-btn:focus-visible,.back-btn:focus-visible{outline:3px solid #789a6344;outline-offset:2px}
+.option-label{font-size:12px;font-weight:800;margin:12px 0 7px;color:#55654e}
+.sweetness-options{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.sweetness-option{cursor:pointer}
+.sweetness-option input{position:absolute;opacity:0;pointer-events:none}
+.sweetness-option span{display:block;text-align:center;padding:10px 7px;border:1px solid #d5ded0;border-radius:12px;background:#fff;font-size:13px;font-weight:700;transition:.18s}
+.sweetness-option input:checked+span{background:#eef4e8;border-color:var(--green);color:var(--dark);box-shadow:inset 0 0 0 1px var(--green)}
+@media (max-width:480px){.sweetness-options{grid-template-columns:1fr}.sweetness-option span{padding:11px}}

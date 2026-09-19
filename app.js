@@ -1,6 +1,12 @@
 const CONFIG = {
-  BACKEND_URL: "https://script.google.com/macros/s/AKfycbyzyTqXRhT6xJmXra1wJQUI5V7ht75qXMpZPnxPPy3HesKaAFKotk3_Pw2WKYpPYKATTQ/exec"
+  BACKEND_URL: "https://script.google.com/macros/s/AKfycby7QqWlv3ABsOw3Ptjzz1AxUMMWrTdRHm2FPU5DvBT6TN1dT05pF8gz0khCX0pzOKzssA/exec",
+  LIFF_ID: ""
 };
+let lineUserId = "";
+async function initLiff(){
+  if(!CONFIG.LIFF_ID || typeof liff === "undefined") return;
+  try{await liff.init({liffId:CONFIG.LIFF_ID});if(liff.isLoggedIn()){const p=await liff.getProfile();lineUserId=p.userId||"";}}catch(e){console.warn("LIFF init skipped",e);}
+}
 
 const products = [
   {id:1,name:"มัทฉะ ลาเต้",image:"images/matcha-latte.jpg",options:[{label:"ธรรมดา",price:79},{label:"Premium",price:99}]},
@@ -49,7 +55,12 @@ function showProduct(id,updateUrl=true){
       <div class="price-list">${p.options.map((o,i)=>`<div class="price">${esc(o.label)} ${money(o.price)}</div>`).join("")}</div>
       <div class="actions product-actions"><button class="back-btn" onclick="scrollToMenu()">ดูเมนูทั้งหมด</button></div>
       <div class="add-panel">
+        <div class="option-label">เลือกรูปแบบ</div>
         <select id="optionSelect" aria-label="เลือกตัวเลือก">${p.options.map((o,i)=>`<option value="${i}">${esc(o.label)} — ${money(o.price)}</option>`).join("")}</select>
+        <div class="option-label">ระดับความหวาน</div>
+        <div class="sweetness-options" role="group" aria-label="ระดับความหวาน">
+          ${["หวานปกติ","หวานน้อย","ไม่หวาน"].map((sweet,i)=>`<label class="sweetness-option"><input type="checkbox" name="sweetness" value="${sweet}" ${i===0?"checked":""} onchange="selectSweetness(this)"><span>${sweet}</span></label>`).join("")}
+        </div>
         <div class="add-row"><input id="optionQty" type="number" min="1" max="99" value="1" aria-label="จำนวน"><button class="add-btn" onclick="addToCart(${p.id})">เพิ่มลงตะกร้า</button></div>
       </div>
     </div>`;
@@ -58,14 +69,20 @@ function showProduct(id,updateUrl=true){
 
 function scrollToMenu(){ document.querySelector(".menu-section").scrollIntoView({behavior:"smooth"}); }
 
+function selectSweetness(input){
+  document.querySelectorAll('input[name="sweetness"]').forEach(x=>{if(x!==input)x.checked=false;});
+  input.checked=true;
+}
+function currentSweetness(){const x=document.querySelector('input[name="sweetness"]:checked');return x?x.value:"หวานปกติ";}
 function addToCart(productId){
   const p=products.find(x=>x.id===Number(productId));
   const optionIndex=Number(document.getElementById("optionSelect").value);
   const qty=Math.max(1,Math.min(99,Number(document.getElementById("optionQty").value)||1));
-  const key=productId+"-"+optionIndex;
+  const sweetness=currentSweetness();
+  const key=productId+"-"+optionIndex+"-"+sweetness;
   const found=cart.find(x=>x.key===key);
   if(found) found.qty=Math.min(99,found.qty+qty);
-  else cart.push({key,productId:p.id,optionIndex,qty});
+  else cart.push({key,productId:p.id,optionIndex,qty,sweetness});
   renderCart();
   document.getElementById("order").scrollIntoView({behavior:"smooth",block:"center"});
 }
@@ -84,7 +101,7 @@ function renderCart(){
   let total=0;
   cartEl.innerHTML=cart.map(item=>{
     const p=products.find(x=>x.id===item.productId),o=p.options[item.optionIndex],line=o.price*item.qty; total+=line;
-    return `<div class="cart-item"><div class="cart-main"><strong>${esc(p.name)}</strong><span>${esc(o.label)} · ${money(o.price)}/แก้ว</span></div>
+    return `<div class="cart-item"><div class="cart-main"><strong>${esc(p.name)}</strong><span>${esc(o.label)} · ${esc(item.sweetness||"หวานปกติ")} · ${money(o.price)}/แก้ว</span></div>
       <div class="qty"><button onclick="changeQty('${item.key}',-1)" aria-label="ลด">−</button><b>${item.qty}</b><button onclick="changeQty('${item.key}',1)" aria-label="เพิ่ม">+</button></div>
       <div class="line-total">${money(line)}</div><button class="remove-btn" onclick="removeItem('${item.key}')" aria-label="ลบ">×</button></div>`;
   }).join("");
@@ -111,14 +128,16 @@ function buildOrder(){
   if(!nickname)return {error:"กรุณากรอกชื่อเล่น"};
   if(!phone)return {error:"กรุณากรอกเบอร์ติดต่อ"};
   if(!cart.length)return {error:"กรุณาเลือกสินค้าอย่างน้อย 1 รายการ"};
-  return {nickname,phone,location:customerLocation,items:cart.map(x=>({productId:x.productId,optionIndex:x.optionIndex,qty:x.qty}))};
+  const comment=document.getElementById("comment").value.trim();
+  return {nickname,phone,comment,lineUserId,location:customerLocation,items:cart.map(x=>({productId:x.productId,optionIndex:x.optionIndex,qty:x.qty,sweetness:x.sweetness||"หวานปกติ"}))};
 }
 
 function orderText(){
   const o=buildOrder(); if(o.error)return o.error;
   const lines=["🍵 MAKHAM CHA — ออเดอร์","ชื่อเล่น: "+o.nickname,"เบอร์ติดต่อ: "+o.phone,""];
   let total=0;
-  cart.forEach((x,i)=>{const p=products.find(a=>a.id===x.productId),op=p.options[x.optionIndex],line=op.price*x.qty;total+=line;lines.push((i+1)+". "+p.name+" ("+op.label+") x"+x.qty+" = "+money(line));});
+  cart.forEach((x,i)=>{const p=products.find(a=>a.id===x.productId),op=p.options[x.optionIndex],line=op.price*x.qty;total+=line;lines.push((i+1)+". "+p.name+" ("+op.label+", "+(x.sweetness||"หวานปกติ")+") x"+x.qty+" = "+money(line));});
+  if(o.comment)lines.push("","รายละเอียดเพิ่มเติม: "+o.comment);
   lines.push("","ยอดรวม: "+money(total),o.location?"พิกัด: "+o.location.lat+", "+o.location.lng:"พิกัด: ไม่ได้ระบุ");
   return lines.join("\n");
 }
@@ -148,9 +167,15 @@ function submitOrder(){
   setTimeout(()=>{if(!completed){completed=true;form.remove();iframe.remove();alert("ระบบรับคำสั่งซื้อแล้ว\nหากไม่ได้รับข้อความใน LINE OA ให้ตรวจสอบการตั้งค่า Backend");cart=[];renderCart();btn.disabled=false;btn.textContent="ส่งออเดอร์ทาง LINE OA";}},5000);
 }
 
-function init(){
+async function init(){
+  await initLiff();
   const params=new URLSearchParams(location.search);
-  showProduct(Number(params.get("product"))||1,false);
+  const selected=params.get("product");
+  if(selected) showProduct(Number(selected),false);
+  else {
+    productEl.innerHTML="";
+    renderMenu();
+  }
   renderCart();
 }
 init();
