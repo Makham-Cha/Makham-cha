@@ -1,6 +1,6 @@
 const CONFIG = {
   BACKEND_URL: "https://script.google.com/macros/s/AKfycby7QqWlv3ABsOw3Ptjzz1AxUMMWrTdRHm2FPU5DvBT6TN1dT05pF8gz0khCX0pzOKzssA/exec",
-  LIFF_ID: ""
+  LIFF_ID: "2011672004-mTPUoEBy"
 };
 let lineUserId = "";
 async function initLiff(){
