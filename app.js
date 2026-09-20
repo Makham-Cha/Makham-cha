@@ -1,5 +1,5 @@
 const CONFIG = {
-  BACKEND_URL: "https://script.google.com/macros/s/AKfycby7QqWlv3ABsOw3Ptjzz1AxUMMWrTdRHm2FPU5DvBT6TN1dT05pF8gz0khCX0pzOKzssA/exec",
+  BACKEND_URL: "https://script.google.com/macros/s/AKfycbww66IIyKZ2VfzBLyf2LWLzMH7P8dRlzrJbV5KPXDL4rC02l-iUq1rwmpp4wEpZIFHf7Q/exec",
   LIFF_ID: "2011672004-mTPUoEBy"
 };
 let lineUserId = "";
