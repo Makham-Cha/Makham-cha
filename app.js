@@ -1,5 +1,5 @@
 const CONFIG = {
-  BACKEND_URL: "https://script.google.com/macros/s/AKfycbwgsziwzsot9wXSaDFOSuQPK8YTYQG1CHRqZddyNLHQdp7dvZTaP0dznvOeVvhqaiye/exec",
+  BACKEND_URL: "https://script.google.com/macros/s/AKfycbzbFcFkpDRRsqkY3NQt_KV6ccyIkPA0rqf1w40zVuvz5W94HmyHRP_fh8_Mq1xNowU/exec",
   LIFF_ID: "2011672004-mTPUoEBy"
 };
 let lineUserId = "";
@@ -11,12 +11,12 @@ window.addEventListener("message",event=>{
   if(!data || typeof data !== "object")return;
   if(pendingOrderFrame && data.orderId && Object.prototype.hasOwnProperty.call(data,"paymentKey")){
     const frame=pendingOrderFrame;pendingOrderFrame=null;
-    latestPayment={orderId:String(data.orderId),paymentKey:String(data.paymentKey||""),total:Number(data.total||0),submitted:false};
+    latestPayment={orderId:String(data.orderId),paymentKey:String(data.paymentKey||""),total:Number(data.total||0),qrUrl:String(data.qrUrl||""),submitted:false};
     const box=document.getElementById("paymentBox"),info=document.getElementById("paymentOrderInfo"),status=document.getElementById("paymentStatus");
     if(data.ok){
       if(info)info.textContent="Order "+latestPayment.orderId+" • ยอดชำระ "+money(latestPayment.total);
       if(box)box.hidden=false;
-      if(status)status.textContent="ชำระเงินแล้ว กรุณาเลือกรูปสลิปด้านล่าง แล้วกด “ส่งสลิปให้ร้าน”";
+      if(status)status.textContent="ชำระเงินแล้ว กรุณาแนบสลิปด้านล่าง แล้วกด “บันทึกสลิป”";
     }else if(status){status.textContent="ไม่สามารถสร้างข้อมูลสำหรับแนบสลิปได้: "+(data.error||"เกิดข้อผิดพลาด");}
     setTimeout(()=>{if(frame)frame.remove();},300);
     return;
@@ -26,7 +26,7 @@ window.addEventListener("message",event=>{
     const status=document.getElementById("paymentStatus"),btn=document.getElementById("uploadSlipBtn"),file=document.getElementById("slipFile");
     if(data.ok){
       latestPayment.submitted=true;
-      if(status)status.textContent="✅ ส่งสลิปเรียบร้อยแล้ว • ร้านจะตรวจสอบยอดเงินเข้าธนาคารก่อนจัดออเดอร์";
+      if(status)status.textContent="✅ บันทึกสลิปเรียบร้อยแล้ว • ร้านจะตรวจสอบยอดเงินและจัดออเดอร์ให้ครับ 💚 คุณสามารถรอรับของได้เลย";
       if(btn)btn.disabled=true;
       if(file)file.disabled=true;
     }else if(status){status.textContent="❌ ส่งสลิปไม่สำเร็จ: "+(data.error||"กรุณาลองใหม่");}
@@ -254,7 +254,7 @@ function previewSlip(input){
   if(!file){if(preview)preview.hidden=true;if(btn)btn.disabled=true;if(status)status.textContent="ยังไม่ได้แนบสลิป";return;}
   if(!/^image\/(jpeg|png|webp)$/i.test(file.type)){input.value="";if(preview)preview.hidden=true;if(btn)btn.disabled=true;if(status)status.textContent="กรุณาเลือกไฟล์ JPG, PNG หรือ WEBP";return;}
   if(file.size>4*1024*1024){input.value="";if(preview)preview.hidden=true;if(btn)btn.disabled=true;if(status)status.textContent="ไฟล์ใหญ่เกิน 4 MB กรุณาเลือกรูปที่เล็กลง";return;}
-  const reader=new FileReader();reader.onload=()=>{if(preview){preview.src=reader.result;preview.hidden=false;}if(btn)btn.disabled=false;if(status)status.textContent="✅ แนบสลิปแล้ว • กด “ส่ง” เพื่อส่งให้ร้าน";};reader.readAsDataURL(file);
+  const reader=new FileReader();reader.onload=()=>{if(preview){preview.src=reader.result;preview.hidden=false;}if(btn)btn.disabled=false;if(status)status.textContent="✅ แนบสลิปแล้ว • กด “บันทึกสลิป” เพื่อส่งให้ร้าน";};reader.readAsDataURL(file);
 }
 function uploadSlip(){
   if(latestPayment.submitted)return;
