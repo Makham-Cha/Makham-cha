@@ -52,3 +52,7 @@ textarea:focus{border-color:var(--green);box-shadow:0 0 0 3px #789a6322}
 @media (max-width:480px){.sweetness-options{grid-template-columns:1fr}.sweetness-option span{padding:11px}}
 
 .payment-note{margin-top:10px;padding:9px 10px;border-radius:10px;background:#eef5e9;color:#66765d;font-size:11px;line-height:1.55;text-align:center}
+
+.shipping-status{margin-top:10px;padding:10px 12px;border-radius:10px;font-size:12px;line-height:1.55}
+.shipping-status.warning{background:#fff6e5;color:#7a5a00}
+.shipping-status.ready{background:#edf8ef;color:#216b35}

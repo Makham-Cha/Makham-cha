@@ -1,5 +1,5 @@
 const CONFIG = {
-  BACKEND_URL: "https://script.google.com/macros/s/AKfycbwr3KKJYwLMLvHOztOy2yIA2kshcjweNeLuhFs1t6JGM5zG2U9bhs3LKq3Q1erraeC6/exec",
+  BACKEND_URL: "https://script.google.com/macros/s/AKfycbw92t1oKlcpTY35XX5xBMD1CLNumeiYdklwMqTCt29aSncPm3rjgI5oGgogXJTDduqo/exec",
   LIFF_ID: "2011672004-mTPUoEBy"
 };
 let lineUserId = "";
@@ -59,7 +59,7 @@ const products = [
 
 let cart = [];
 let customerLocation = null;
-let shopConfig = {storeConfigured:false,storeLat:null,storeLng:null,shippingRates:[]};
+let shopConfig = {ok:false,storeConfigured:false,storeLat:null,storeLng:null,shippingRates:[],shippingStatus:null,configError:""};
 let shopConfigLoaded = false;
 
 const productEl = document.getElementById("product");
@@ -77,7 +77,16 @@ function loadShopConfig(){
     const cb="makhamConfig_"+Date.now();
     const script=document.createElement("script");
     const cleanup=()=>{delete window[cb];script.remove();};
-    window[cb]=data=>{try{if(data&&data.ok){shopConfig=data;shopConfigLoaded=true;}}finally{cleanup();resolve(shopConfigLoaded);}};
+    window[cb]=data=>{
+      try{
+        shopConfig=data||{ok:false,configError:"ไม่ได้รับข้อมูลการตั้งค่าพื้นที่จัดส่งจากเซิร์ฟเวอร์"};
+        shopConfigLoaded=!!(data&&data.ok);
+        renderShippingSummary();
+      }finally{
+        cleanup();
+        resolve(shopConfigLoaded);
+      }
+    };
     script.src=CONFIG.BACKEND_URL+"?action=publicConfig&callback="+cb;
     script.onerror=()=>{cleanup();resolve(false);};
     document.head.appendChild(script);
@@ -89,19 +98,53 @@ function haversineMeters(lat1,lng1,lat2,lng2){
   const a=Math.sin(dLat/2)**2+Math.cos(lat1*toRad)*Math.cos(lat2*toRad)*Math.sin(dLng/2)**2;
   return 2*R*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
 }
-function shippingEstimate(){
-  if(!customerLocation||!shopConfig.storeConfigured)return {distanceMeters:null,fee:null};
+function shippingEstimateDetailed(){
+  if(!customerLocation){
+    return {distanceMeters:null,fee:null,code:"LOCATION_MISSING",message:"กรุณากด “แท็กโลเคชั่น” เพื่อระบุตำแหน่งจัดส่งก่อนสั่งซื้อ"};
+  }
+  if(!shopConfigLoaded){
+    if(shopConfig.configError){
+      return {distanceMeters:null,fee:null,code:"CONFIG_LOAD_ERROR",message:"ไม่สามารถโหลดการตั้งค่าพื้นที่จัดส่งจากเซิร์ฟเวอร์: "+shopConfig.configError};
+    }
+    return {distanceMeters:null,fee:null,code:"CONFIG_LOADING",message:"กำลังโหลดการตั้งค่าพื้นที่จัดส่ง กรุณารอสักครู่"};
+  }
+  if(!shopConfig.storeConfigured){
+    return {distanceMeters:null,fee:null,code:"STORE_LOCATION_MISSING",message:"ร้านยังไม่ได้ตั้งค่าพิกัดร้านใน Sheet Settings"};
+  }
+  if(!(shopConfig.shippingRates||[]).length){
+    return {distanceMeters:null,fee:null,code:"SHIPPING_RATES_MISSING",message:"ร้านยังไม่ได้ตั้งค่าช่วงค่าจัดส่งใน Sheet ShippingRates"};
+  }
   const distance=Math.round(haversineMeters(shopConfig.storeLat,shopConfig.storeLng,customerLocation.lat,customerLocation.lng));
   const rate=(shopConfig.shippingRates||[]).find(r=>distance<=Number(r.maxMeters));
-  return {distanceMeters:distance,fee:rate?Number(rate.fee):null};
+  if(!rate){
+    const max=Math.max.apply(null,shopConfig.shippingRates.map(r=>Number(r.maxMeters)));
+    return {distanceMeters:distance,fee:null,code:"OUT_OF_AREA",message:"ระยะทาง "+distance.toLocaleString("th-TH")+" เมตร เกินพื้นที่จัดส่งสูงสุด "+max.toLocaleString("th-TH")+" เมตร"};
+  }
+  return {distanceMeters:distance,fee:Number(rate.fee),code:"READY",message:"อยู่ในพื้นที่จัดส่ง"};
+}
+function shippingEstimate(){
+  return shippingEstimateDetailed();
 }
 function renderShippingSummary(){
   const feeEl=document.getElementById("shippingFee"),distanceEl=document.getElementById("shippingDistance");
   if(!feeEl||!distanceEl)return;
-  const est=shippingEstimate();
-  if(est.fee===null){feeEl.textContent="ยังไม่คำนวณ";distanceEl.textContent=customerLocation?"ไม่อยู่ในช่วงจัดส่ง / ตรวจสอบพื้นที่":"กรุณาแท็กโลเคชั่น";return;}
+  const est=shippingEstimateDetailed();
+  const statusEl=document.getElementById("shippingStatus");
+  if(est.fee===null){
+    feeEl.textContent="ยังไม่คำนวณ";
+    distanceEl.textContent=est.distanceMeters!==null?est.distanceMeters.toLocaleString("th-TH")+" เมตร":"—";
+    if(statusEl){
+      statusEl.textContent="⚠️ "+est.message;
+      statusEl.className="shipping-status warning";
+    }
+    return;
+  }
   feeEl.textContent=est.fee===0?"ฟรี":money(est.fee);
   distanceEl.textContent=est.distanceMeters.toLocaleString("th-TH")+" เมตร";
+  if(statusEl){
+    statusEl.textContent="✅ "+est.message;
+    statusEl.className="shipping-status ready";
+  }
 }
 
 function imageWithFallback(src,alt,extraClass=""){
@@ -228,8 +271,12 @@ async function copyOrderText(){
 function submitOrder(){
   const order=buildOrder();
   if(order.error){alert(order.error);return;}
-  const est=shippingEstimate();
-  if(est.fee===null){alert("กรุณาแท็กโลเคชั่นจัดส่ง และตรวจสอบว่าอยู่ในพื้นที่จัดส่งของร้านครับ");return;}
+  const est=shippingEstimateDetailed();
+  if(est.fee===null){
+    renderShippingSummary();
+    alert(est.message);
+    return;
+  }
   const btn=document.querySelector(".order-btn");
   if(btn.disabled)return;
   btn.disabled=true;btn.textContent="กำลังส่งออเดอร์...";
