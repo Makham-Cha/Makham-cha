@@ -44,14 +44,15 @@
         <button class="order-btn" type="button" onclick="submitOrder()">ส่งออเดอร์ทาง LINE OA</button>
         <button class="copy-btn" type="button" onclick="copyOrderText()">คัดลอกข้อความออเดอร์</button>
         <div id="paymentBox" class="payment-box" hidden>
-          <div class="payment-title">📎 แนบสลิปการโอนเงิน</div>
+          <div class="payment-title">💳 ชำระเงินและแนบสลิป</div>
           <div id="paymentOrderInfo" class="payment-info"></div>
-          <label class="slip-picker">เลือกรูปสลิป
+          <label class="slip-picker">📎 เลือกรูปสลิปการโอนเงิน
             <input id="slipFile" type="file" accept="image/jpeg,image/png,image/webp" onchange="previewSlip(this)">
           </label>
           <img id="slipPreview" class="slip-preview" alt="ตัวอย่างสลิป" hidden>
-          <button id="uploadSlipBtn" class="upload-slip-btn" type="button" onclick="uploadSlip()" disabled>ส่ง</button>
-          <div id="paymentStatus" class="payment-status">เลือกสลิปแล้วจึงกดส่ง</div>
+          <button id="uploadSlipBtn" class="upload-slip-btn" type="button" onclick="uploadSlip()" disabled>ส่งการชำระเงิน</button>
+          <div id="paymentStatus" class="payment-status">เลือกสลิปแล้วจึงกด “ส่งการชำระเงิน”</div>
+          <div class="payment-note">* อาจจะมีการส่งล่าช้าบ้าง เพราะทางร้านทำใหม่ทุกแก้ว ส่งด้วยใจ 💚</div>
         </div>
         <div class="privacy-note">ระบบจะใช้ชื่อจากโปรไฟล์ LINE เบอร์ติดต่อ และตำแหน่งที่คุณกดยืนยันเพื่อจัดการออเดอร์นี้</div>
       </div>
