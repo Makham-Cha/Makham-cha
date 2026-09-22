@@ -23,6 +23,7 @@
     <section id="order" class="order-section">
       <div class="section-title">ข้อมูลสำหรับจัดส่ง</div>
       <div class="order-card">
+        <div id="orderStatus" class="order-status warning">กำลังตรวจสอบสถานะร้าน...</div>
         <div class="form-grid">
           <label>ชื่อ LINE <input id="lineNameDisplay" type="text" value="กำลังเชื่อมต่อ LINE..." readonly></label>
           <label>เบอร์ติดต่อ <span>*</span><input id="phone" type="tel" maxlength="20" placeholder="08x-xxx-xxxx" autocomplete="tel"></label>
@@ -35,7 +36,12 @@
           <button id="locationBtn" class="location-btn" type="button" onclick="getCustomerLocation()">แท็กโลเคชั่น</button>
         </div>
         <div id="cart" class="cart"></div>
-        <div class="total-row"><span>ยอดรวมทั้งหมด</span><strong id="grandTotal">฿0</strong></div>
+        <div class="shipping-summary">
+          <div><span>ค่าสินค้า</span><strong id="subtotal">฿0</strong></div>
+          <div><span>ค่าจัดส่ง</span><strong id="shippingFee">ยังไม่คำนวณ</strong></div>
+          <div><span>ระยะทาง</span><strong id="shippingDistance">กรุณาแท็กโลเคชั่น</strong></div>
+        </div>
+        <div class="total-row"><span>ยอดชำระทั้งหมด</span><strong id="grandTotal">฿0</strong></div>
         <button class="order-btn" type="button" onclick="submitOrder()">ส่งออเดอร์ทาง LINE OA</button>
         <button class="copy-btn" type="button" onclick="copyOrderText()">คัดลอกข้อความออเดอร์</button>
         <div class="privacy-note">ระบบจะใช้ชื่อจากโปรไฟล์ LINE เบอร์ติดต่อ และตำแหน่งที่คุณกดยืนยันเพื่อจัดการออเดอร์นี้</div>

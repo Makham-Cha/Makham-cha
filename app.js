@@ -1,5 +1,5 @@
 const CONFIG = {
-  BACKEND_URL: "https://script.google.com/macros/s/AKfycbzPdcjjBJv0uZ7I2XLewzp-aIXBas_EDArg1SqXec4i_rbkGf5fgNdLCMvck5pa-JfNBg/exec",
+  BACKEND_URL: "https://script.google.com/macros/s/AKfycbxxP4hoTNV1I9Yr6V7b3q_pW4WdoZooVhkT0s7LabnWr6Any3tQ117Z-v_clJU4aXc/exec",
   LIFF_ID: "2011672004-mTPUoEBy"
 };
 let lineUserId = "";
@@ -26,6 +26,8 @@ const products = [
 
 let cart = [];
 let customerLocation = null;
+let shopConfig = {orderActive:true,storeConfigured:false,storeLat:null,storeLng:null,shippingRates:[]};
+let shopConfigLoaded = false;
 
 const productEl = document.getElementById("product");
 const menuEl = document.getElementById("menu");
@@ -37,6 +39,45 @@ function esc(s){
 }
 
 function money(n){ return "฿"+Number(n).toLocaleString("th-TH"); }
+function loadShopConfig(){
+  return new Promise(resolve=>{
+    const cb="makhamConfig_"+Date.now();
+    const script=document.createElement("script");
+    const cleanup=()=>{delete window[cb];script.remove();};
+    window[cb]=data=>{try{if(data&&data.ok){shopConfig=data;shopConfigLoaded=true;}}finally{cleanup();resolve(shopConfigLoaded);}};
+    script.src=CONFIG.BACKEND_URL+"?action=publicConfig&callback="+cb;
+    script.onerror=()=>{cleanup();resolve(false);};
+    document.head.appendChild(script);
+    setTimeout(()=>{if(window[cb]){cleanup();resolve(false);}},7000);
+  });
+}
+function haversineMeters(lat1,lng1,lat2,lng2){
+  const R=6371000,toRad=Math.PI/180,dLat=(lat2-lat1)*toRad,dLng=(lng2-lng1)*toRad;
+  const a=Math.sin(dLat/2)**2+Math.cos(lat1*toRad)*Math.cos(lat2*toRad)*Math.sin(dLng/2)**2;
+  return 2*R*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+}
+function shippingEstimate(){
+  if(!customerLocation||!shopConfig.storeConfigured)return {distanceMeters:null,fee:null};
+  const distance=Math.round(haversineMeters(shopConfig.storeLat,shopConfig.storeLng,customerLocation.lat,customerLocation.lng));
+  const rate=(shopConfig.shippingRates||[]).find(r=>distance<=Number(r.maxMeters));
+  return {distanceMeters:distance,fee:rate?Number(rate.fee):null};
+}
+function applyShopStatus(){
+  const status=document.getElementById("orderStatus"),btn=document.querySelector(".order-btn");
+  if(!status)return;
+  if(!shopConfigLoaded){status.className="order-status warning";status.textContent="🟡 ไม่สามารถตรวจสอบสถานะร้านได้ กรุณาลองใหม่";if(btn)btn.disabled=true;return;}
+  if(!shopConfig.orderActive){status.className="order-status closed";status.textContent="🔴 ร้านปิดรับออเดอร์ชั่วคราว กรุณากลับมาสั่งซื้อใหม่ภายหลัง";if(btn)btn.disabled=true;return;}
+  if(!shopConfig.storeConfigured){status.className="order-status warning";status.textContent="🟡 ร้านยังไม่ได้ตั้งค่าพิกัดสำหรับคำนวณค่าจัดส่ง";if(btn)btn.disabled=true;return;}
+  status.className="order-status open";status.textContent="🟢 เปิดรับออเดอร์";if(btn)btn.disabled=false;
+}
+function renderShippingSummary(){
+  const feeEl=document.getElementById("shippingFee"),distanceEl=document.getElementById("shippingDistance");
+  if(!feeEl||!distanceEl)return;
+  const est=shippingEstimate();
+  if(est.fee===null){feeEl.textContent="ยังไม่คำนวณ";distanceEl.textContent=customerLocation?"ไม่อยู่ในช่วงจัดส่ง / ตรวจสอบพื้นที่":"กรุณาแท็กโลเคชั่น";return;}
+  feeEl.textContent=est.fee===0?"ฟรี":money(est.fee);
+  distanceEl.textContent=est.distanceMeters.toLocaleString("th-TH")+" เมตร";
+}
 
 function imageWithFallback(src,alt,extraClass=""){
   return `<img class="${extraClass}" src="${src}" alt="${esc(alt)}"
@@ -105,15 +146,18 @@ function changeQty(key,delta){
 function removeItem(key){ cart=cart.filter(x=>x.key!==key); renderCart(); }
 
 function renderCart(){
-  if(!cart.length){cartEl.innerHTML='<div class="empty-cart">ยังไม่มีสินค้าในตะกร้า เลือกเมนูด้านบนได้เลย</div>';totalEl.textContent=money(0);return;}
-  let total=0;
+  if(!cart.length){cartEl.innerHTML='<div class="empty-cart">ยังไม่มีสินค้าในตะกร้า เลือกเมนูด้านบนได้เลย</div>';totalEl.textContent=money(0);renderShippingSummary();return;}
+  let subtotal=0;
   cartEl.innerHTML=cart.map(item=>{
-    const p=products.find(x=>x.id===item.productId),o=p.options[item.optionIndex],line=o.price*item.qty; total+=line;
+    const p=products.find(x=>x.id===item.productId),o=p.options[item.optionIndex],line=o.price*item.qty; subtotal+=line;
     return `<div class="cart-item"><div class="cart-main"><strong>${esc(p.name)}</strong><span>${esc(o.label)} · ${esc(item.sweetness||"หวานปกติ")} · ${money(o.price)}/แก้ว</span></div>
       <div class="qty"><button onclick="changeQty('${item.key}',-1)" aria-label="ลด">−</button><b>${item.qty}</b><button onclick="changeQty('${item.key}',1)" aria-label="เพิ่ม">+</button></div>
       <div class="line-total">${money(line)}</div><button class="remove-btn" onclick="removeItem('${item.key}')" aria-label="ลบ">×</button></div>`;
   }).join("");
-  totalEl.textContent=money(total);
+  const est=shippingEstimate(),grand=est.fee===null?subtotal:subtotal+est.fee;
+  totalEl.textContent=money(grand);
+  const subtotalEl=document.getElementById("subtotal");if(subtotalEl)subtotalEl.textContent=money(subtotal);
+  renderShippingSummary();
 }
 
 function getCustomerLocation(){
@@ -124,6 +168,7 @@ function getCustomerLocation(){
     customerLocation={lat:Number(pos.coords.latitude.toFixed(7)),lng:Number(pos.coords.longitude.toFixed(7))};
     status.innerHTML=`ระบุตำแหน่งแล้ว • ${customerLocation.lat}, ${customerLocation.lng}<br><a href="https://www.google.com/maps?q=${customerLocation.lat},${customerLocation.lng}" target="_blank" rel="noopener">เปิดดูบน Google Maps</a>`;
     btn.disabled=false;btn.textContent="อัปเดตตำแหน่ง";
+    renderCart();
   },err=>{
     const msg=err.code===1?"กรุณาอนุญาตการเข้าถึงตำแหน่ง":err.code===2?"ไม่สามารถระบุตำแหน่งได้":"การระบุตำแหน่งใช้เวลานานเกินไป";
     status.textContent=msg;btn.disabled=false;btn.textContent="ลองอีกครั้ง";
@@ -141,10 +186,11 @@ function buildOrder(){
 function orderText(){
   const o=buildOrder(); if(o.error)return o.error;
   const lines=["🍵 MAKHAM CHA — ออเดอร์","ชื่อ LINE: "+(o.nickname||"ลูกค้า LINE"),"เบอร์ติดต่อ: "+o.phone,""];
-  let total=0;
-  cart.forEach((x,i)=>{const p=products.find(a=>a.id===x.productId),op=p.options[x.optionIndex],line=op.price*x.qty;total+=line;lines.push((i+1)+". "+p.name+" ("+op.label+", "+(x.sweetness||"หวานปกติ")+") x"+x.qty+" = "+money(line));});
+  let subtotal=0;
+  cart.forEach((x,i)=>{const p=products.find(a=>a.id===x.productId),op=p.options[x.optionIndex],line=op.price*x.qty;subtotal+=line;lines.push((i+1)+". "+p.name+" ("+op.label+", "+(x.sweetness||"หวานปกติ")+") x"+x.qty+" = "+money(line));});
+  const est=shippingEstimate();
   if(o.comment)lines.push("","รายละเอียดเพิ่มเติม: "+o.comment);
-  lines.push("","ยอดรวม: "+money(total),o.location?"พิกัด: "+o.location.lat+", "+o.location.lng:"พิกัด: ไม่ได้ระบุ");
+  lines.push("","ค่าสินค้า: "+money(subtotal),"ค่าจัดส่ง: "+(est.fee===0?"ฟรี":est.fee===null?"ยังไม่คำนวณ":money(est.fee)),"ยอดชำระทั้งหมด: "+money(est.fee===null?subtotal:subtotal+est.fee),o.location?"พิกัด: "+o.location.lat+", "+o.location.lng:"พิกัด: ไม่ได้ระบุ");
   return lines.join("\n");
 }
 
@@ -155,8 +201,12 @@ async function copyOrderText(){
   catch(e){window.prompt("คัดลอกข้อความนี้",text);}
 }
 function submitOrder(){
+  if(!shopConfigLoaded){alert("กำลังตรวจสอบสถานะร้าน กรุณารอสักครู่แล้วลองใหม่ครับ");return;}
+  if(!shopConfig.orderActive){alert("🔴 ร้านปิดรับออเดอร์ชั่วคราวครับ");return;}
   const order=buildOrder();
   if(order.error){alert(order.error);return;}
+  const est=shippingEstimate();
+  if(est.fee===null){alert("กรุณาแท็กโลเคชั่นจัดส่ง และตรวจสอบว่าอยู่ในพื้นที่จัดส่งของร้านครับ");return;}
   const btn=document.querySelector(".order-btn");
   if(btn.disabled)return;
   btn.disabled=true;btn.textContent="กำลังส่งออเดอร์...";
@@ -175,6 +225,9 @@ function submitOrder(){
 
 async function init(){
   await initLiff();
+  await loadShopConfig();
+  applyShopStatus();
+  renderShippingSummary();
   const params=new URLSearchParams(location.search);
   const selected=params.get("product");
   if(selected) showProduct(Number(selected),false);
