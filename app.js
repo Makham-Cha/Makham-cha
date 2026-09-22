@@ -1,5 +1,5 @@
 const CONFIG = {
-  BACKEND_URL: "https://script.google.com/macros/s/AKfycbwI5kax0Ke21Nk-JsW-IaGOHulEZ1sMeliQWtKmtXM0Zy8ybqSP1zK6Pnn5y9_PGpyk/exec",
+  BACKEND_URL: "https://script.google.com/macros/s/AKfycbwNPWPFQgP2BkrTFNyxFHxDLozSlUNwitRXrcXHUKXTnLwP8g_wtJR5oaF9CZ_RVLeU/exec",
   LIFF_ID: "2011672004-mTPUoEBy"
 };
 let lineUserId = "";
@@ -250,8 +250,15 @@ function submitOrder(){
   const input=document.createElement("input");input.name="payload";input.value=JSON.stringify(order);form.appendChild(input);document.body.appendChild(form);
   pendingOrderFrame=iframe;
   form.submit();
-  setTimeout(()=>{if(pendingOrderFrame===iframe){pendingOrderFrame=null;iframe.remove();form.remove();alert("ระบบยังไม่ได้รับคำตอบจากเซิร์ฟเวอร์ กรุณาตรวจสอบอินเทอร์เน็ตแล้วลองใหม่ครับ");}btn.disabled=false;btn.textContent="ส่งออเดอร์ทาง LINE OA";},10000);
-  cart=[];renderCart();
+  setTimeout(()=>{
+    if(pendingOrderFrame===iframe){
+      pendingOrderFrame=null;
+      iframe.remove();form.remove();
+      alert("เซิร์ฟเวอร์ใช้เวลาประมวลผลนานกว่าปกติ กรุณารอสักครู่ แล้วตรวจสอบข้อความใน LINE ก่อนกดส่งซ้ำ");
+    }
+    btn.disabled=false;
+    btn.textContent="ส่งออเดอร์ทาง LINE OA";
+  },60000);
 }
 function previewSlip(input){
   const file=input.files&&input.files[0],preview=document.getElementById("slipPreview"),btn=document.getElementById("uploadSlipBtn"),status=document.getElementById("paymentStatus");
