@@ -1,11 +1,19 @@
 const CONFIG = {
-  BACKEND_URL: "https://script.google.com/macros/s/AKfycbwhFTlKjKL6uRXld41DX_wwM-IUq8yMY1l3LCmaeeq4bQbC8X25bsa9s_HG3GXW0Fz6gA/exec",
+  BACKEND_URL: "https://script.google.com/macros/s/AKfycbzJVngl8Jwswv7t4KTsusUdJmwtwHWCtiPtiG8dXcHvOA4fiVwgCNB0G3yx5fS-croikA/exec",
   LIFF_ID: "2011672004-mTPUoEBy"
 };
 let lineUserId = "";
 async function initLiff(){
-  if(!CONFIG.LIFF_ID || typeof liff === "undefined") return;
-  try{await liff.init({liffId:CONFIG.LIFF_ID});if(liff.isLoggedIn()){const p=await liff.getProfile();lineUserId=p.userId||"";}}catch(e){console.warn("LIFF init skipped",e);}
+  const nameEl=document.getElementById("lineNameDisplay");
+  if(!CONFIG.LIFF_ID || typeof liff === "undefined"){if(nameEl)nameEl.value="ลูกค้า LINE";return;}
+  try{
+    await liff.init({liffId:CONFIG.LIFF_ID});
+    if(liff.isLoggedIn()){
+      const p=await liff.getProfile();
+      lineUserId=p.userId||"";
+      if(nameEl)nameEl.value=p.displayName||"ลูกค้า LINE";
+    }else if(nameEl){nameEl.value="กรุณาเปิดผ่าน LINE";}
+  }catch(e){console.warn("LIFF init skipped",e);if(nameEl)nameEl.value="ลูกค้า LINE";}
 }
 
 const products = [
@@ -123,18 +131,16 @@ function getCustomerLocation(){
 }
 
 function buildOrder(){
-  const nickname=document.getElementById("nickname").value.trim();
   const phone=document.getElementById("phone").value.trim();
-  if(!nickname)return {error:"กรุณากรอกชื่อเล่น"};
   if(!phone)return {error:"กรุณากรอกเบอร์ติดต่อ"};
   if(!cart.length)return {error:"กรุณาเลือกสินค้าอย่างน้อย 1 รายการ"};
   const comment=document.getElementById("comment").value.trim();
-  return {nickname,phone,comment,lineUserId,location:customerLocation,items:cart.map(x=>({productId:x.productId,optionIndex:x.optionIndex,qty:x.qty,sweetness:x.sweetness||"หวานปกติ"}))};
+  return {nickname:"",phone,comment,lineUserId,location:customerLocation,items:cart.map(x=>({productId:x.productId,optionIndex:x.optionIndex,qty:x.qty,sweetness:x.sweetness||"หวานปกติ"}))};
 }
 
 function orderText(){
   const o=buildOrder(); if(o.error)return o.error;
-  const lines=["🍵 MAKHAM CHA — ออเดอร์","ชื่อเล่น: "+o.nickname,"เบอร์ติดต่อ: "+o.phone,""];
+  const lines=["🍵 MAKHAM CHA — ออเดอร์","ชื่อ LINE: "+(o.nickname||"ลูกค้า LINE"),"เบอร์ติดต่อ: "+o.phone,""];
   let total=0;
   cart.forEach((x,i)=>{const p=products.find(a=>a.id===x.productId),op=p.options[x.optionIndex],line=op.price*x.qty;total+=line;lines.push((i+1)+". "+p.name+" ("+op.label+", "+(x.sweetness||"หวานปกติ")+") x"+x.qty+" = "+money(line));});
   if(o.comment)lines.push("","รายละเอียดเพิ่มเติม: "+o.comment);
