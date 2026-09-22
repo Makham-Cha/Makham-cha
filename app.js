@@ -1,5 +1,5 @@
 const CONFIG = {
-  BACKEND_URL: "https://script.google.com/macros/s/AKfycbxqAY79d7hlnWYbBBlMOa1Q0Xh28eMQ-cgGs7wzQwDWtzQYMBHM0Fau3OAQPTkRR1VA/exec",
+  BACKEND_URL: "https://script.google.com/macros/s/AKfycbx1dQOskCojsySH-J5Z7tCWP9mhRXaUBc7AI6Esyf4V3yJ07HfmR0nTqO-MGQ-IOekt/exec",
   LIFF_ID: "2011672004-mTPUoEBy"
 };
 let lineUserId = "";
@@ -237,39 +237,32 @@ function submitOrder(){
   if(order.error){alert(order.error);return;}
   const est=shippingEstimate();
   if(est.fee===null){alert("กรุณาแท็กโลเคชั่นจัดส่ง และตรวจสอบว่าอยู่ในพื้นที่จัดส่งของร้านครับ");return;}
+  const fileInput=document.getElementById("slipFile"),file=fileInput&&fileInput.files&&fileInput.files[0];
+  if(!file){alert("กรุณาเลือกรูปสลิปก่อนกดส่ง");fileInput&&fileInput.focus();return;}
+  if(!/^image\/(jpeg|png|webp)$/i.test(file.type)){alert("กรุณาเลือกไฟล์สลิป JPG, PNG หรือ WEBP");return;}
+  if(file.size>4*1024*1024){alert("ไฟล์สลิปใหญ่เกิน 4 MB กรุณาเลือกรูปที่เล็กลง");return;}
   const btn=document.querySelector(".order-btn");
   if(btn.disabled)return;
-  btn.disabled=true;btn.textContent="กำลังส่งออเดอร์...";
-  const iframeName="makhamOrderFrame_"+Date.now();
-  const iframe=document.createElement("iframe");iframe.name=iframeName;iframe.style.display="none";document.body.appendChild(iframe);
-  const form=document.createElement("form");form.method="POST";form.action=CONFIG.BACKEND_URL;form.target=iframeName;form.style.display="none";
-  const input=document.createElement("input");input.name="payload";input.value=JSON.stringify(order);form.appendChild(input);document.body.appendChild(form);
-  pendingOrderFrame=iframe;
-  form.submit();
-  setTimeout(()=>{if(pendingOrderFrame===iframe){pendingOrderFrame=null;iframe.remove();form.remove();alert("ระบบรับคำสั่งซื้อแล้ว แต่ยังไม่ได้รับข้อมูลหน้าแนบสลิป\nสามารถส่งสลิปใน LINE OA ได้จากปุ่มในข้อความสรุปออเดอร์");}btn.disabled=false;btn.textContent="ส่งออเดอร์ทาง LINE OA";},8000);
-  cart=[];renderCart();
+  btn.disabled=true;btn.textContent="กำลังส่ง...";
+  const reader=new FileReader();
+  reader.onload=()=>{
+    order.slipImageData=String(reader.result||"");
+    const iframeName="makhamOrderFrame_"+Date.now();
+    const iframe=document.createElement("iframe");iframe.name=iframeName;iframe.style.display="none";document.body.appendChild(iframe);
+    const form=document.createElement("form");form.method="POST";form.action=CONFIG.BACKEND_URL;form.target=iframeName;form.style.display="none";
+    const input=document.createElement("input");input.name="payload";input.value=JSON.stringify(order);form.appendChild(input);document.body.appendChild(form);
+    pendingOrderFrame=iframe;form.submit();
+    setTimeout(()=>{if(pendingOrderFrame===iframe){pendingOrderFrame=null;iframe.remove();form.remove();alert("ระบบยังไม่ได้รับคำตอบจากเซิร์ฟเวอร์ กรุณาตรวจสอบอินเทอร์เน็ตแล้วลองใหม่ครับ");}btn.disabled=false;btn.textContent="ส่ง";},15000);
+  };
+  reader.onerror=()=>{alert("ไม่สามารถอ่านไฟล์สลิปได้ กรุณาเลือกไฟล์ใหม่");btn.disabled=false;btn.textContent="ส่ง";};
+  reader.readAsDataURL(file);
 }
 function previewSlip(input){
-  const file=input.files&&input.files[0],preview=document.getElementById("slipPreview"),btn=document.getElementById("uploadSlipBtn"),status=document.getElementById("paymentStatus");
-  if(!file){if(preview)preview.hidden=true;if(btn)btn.disabled=true;return;}
-  if(!/^image\/(jpeg|png|webp)$/i.test(file.type)){input.value="";if(status)status.textContent="กรุณาเลือกไฟล์ JPG, PNG หรือ WEBP";if(btn)btn.disabled=true;return;}
-  if(file.size>5*1024*1024){input.value="";if(status)status.textContent="ไฟล์ใหญ่เกิน 5 MB กรุณาเลือกภาพสลิปที่เล็กลง";if(btn)btn.disabled=true;return;}
-  const reader=new FileReader();reader.onload=()=>{if(preview){preview.src=reader.result;preview.hidden=false;}if(btn)btn.disabled=false;if(status)status.textContent="พร้อมส่งสลิป • "+(file.size/1024/1024).toFixed(2)+" MB";};reader.readAsDataURL(file);
-}
-function uploadSlip(){
-  if(latestPayment.submitted)return;
-  if(!latestPayment.orderId||!latestPayment.paymentKey){alert("ยังไม่พบข้อมูลออเดอร์สำหรับแนบสลิป");return;}
-  const input=document.getElementById("slipFile"),file=input&&input.files&&input.files[0],btn=document.getElementById("uploadSlipBtn"),status=document.getElementById("paymentStatus");
-  if(!file){alert("กรุณาเลือกรูปสลิปก่อน");return;}
-  btn.disabled=true;if(status)status.textContent="กำลังอัปโหลดสลิป...";
-  const reader=new FileReader();reader.onload=()=>{
-    const iframeName="makhamPaymentFrame_"+Date.now(),iframe=document.createElement("iframe");iframe.name=iframeName;iframe.style.display="none";document.body.appendChild(iframe);
-    const form=document.createElement("form");form.method="POST";form.action=CONFIG.BACKEND_URL;form.target=iframeName;form.style.display="none";
-    const payload={orderId:latestPayment.orderId,key:latestPayment.paymentKey,imageData:String(reader.result||"")};
-    const inputEl=document.createElement("input");inputEl.name="slipPayload";inputEl.value=JSON.stringify(payload);form.appendChild(inputEl);document.body.appendChild(form);
-    pendingPaymentFrame=iframe;form.submit();
-    setTimeout(()=>{if(pendingPaymentFrame===iframe){pendingPaymentFrame=null;if(status)status.textContent="ยังไม่ได้รับผลตอบกลับจากระบบ กรุณาตรวจสอบอีกครั้ง";btn.disabled=false;}iframe.remove();form.remove();},10000);
-  };reader.readAsDataURL(file);
+  const file=input.files&&input.files[0],preview=document.getElementById("slipPreview"),status=document.getElementById("paymentStatus");
+  if(!file){if(preview)preview.hidden=true;if(status)status.textContent="ยังไม่ได้แนบสลิป";return;}
+  if(!/^image\/(jpeg|png|webp)$/i.test(file.type)){input.value="";if(preview)preview.hidden=true;if(status)status.textContent="กรุณาเลือกไฟล์ JPG, PNG หรือ WEBP";return;}
+  if(file.size>4*1024*1024){input.value="";if(preview)preview.hidden=true;if(status)status.textContent="ไฟล์ใหญ่เกิน 4 MB กรุณาเลือกรูปที่เล็กลง";return;}
+  const reader=new FileReader();reader.onload=()=>{if(preview){preview.src=reader.result;preview.hidden=false;}if(status)status.textContent="✅ แนบสลิปแล้ว • "+(file.size/1024/1024).toFixed(2)+" MB";};reader.readAsDataURL(file);
 }
 
 async function init(){
