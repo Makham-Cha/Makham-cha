@@ -1,5 +1,5 @@
 const CONFIG = {
-  BACKEND_URL: "https://script.google.com/macros/s/AKfycbw2Oc089nL65OIgSESGIIyKBO4FlFJ390iCQTMHVMfsRBx8i4NCHfwauNKsqRJVDplq/exec",
+  BACKEND_URL: "https://script.google.com/macros/s/AKfycbxehN4572vb38VvE-7FNbJlFwPChdmhuPaYIGpaENb1OCpEm3nFECWFS5oMyOTN_oba/exec",
   LIFF_ID: "2011672004-mTPUoEBy"
 };
 let lineUserId = "";
@@ -16,7 +16,7 @@ window.addEventListener("message",event=>{
     if(data.ok){
       if(info)info.textContent="Order "+latestPayment.orderId+" • ยอดชำระ "+money(latestPayment.total);
       if(box)box.hidden=false;
-      if(status)status.textContent="ชำระเงินแล้ว กรุณาเลือกรูปสลิปด้านล่าง แล้วกด “ส่งสลิปให้ร้าน”";
+      if(status)status.textContent="รับออเดอร์เรียบร้อยแล้วครับ • กรุณาชำระเงินและแนบสลิปด้านล่าง";
     }else if(status){status.textContent="ไม่สามารถสร้างข้อมูลสำหรับแนบสลิปได้: "+(data.error||"เกิดข้อผิดพลาด");}
     setTimeout(()=>{if(frame)frame.remove();},300);
     return;
@@ -26,7 +26,7 @@ window.addEventListener("message",event=>{
     const status=document.getElementById("paymentStatus"),btn=document.getElementById("uploadSlipBtn"),file=document.getElementById("slipFile");
     if(data.ok){
       latestPayment.submitted=true;
-      if(status)status.textContent="✅ ส่งสลิปเรียบร้อยแล้ว • ร้านจะตรวจสอบยอดเงินเข้าธนาคารก่อนจัดออเดอร์";
+      if(status)status.textContent="✅ ได้รับสลิปการโอนเงินของ Order "+latestPayment.orderId+" เรียบร้อยแล้วครับ";
       if(btn)btn.disabled=true;
       if(file)file.disabled=true;
     }else if(status){status.textContent="❌ ส่งสลิปไม่สำเร็จ: "+(data.error||"กรุณาลองใหม่");}
@@ -215,7 +215,9 @@ function buildOrder(){
   if(!phone)return {error:"กรุณากรอกเบอร์ติดต่อ"};
   if(!cart.length)return {error:"กรุณาเลือกสินค้าอย่างน้อย 1 รายการ"};
   const comment=document.getElementById("comment").value.trim();
-  return {nickname:"",phone,comment,lineUserId,location:customerLocation,items:cart.map(x=>({productId:x.productId,optionIndex:x.optionIndex,qty:x.qty,sweetness:x.sweetness||"หวานปกติ"}))};
+  const nameEl=document.getElementById("lineNameDisplay");
+  const nickname=(nameEl&&nameEl.value&&nameEl.value!=="กรุณาเปิดผ่าน LINE")?nameEl.value.trim():"ลูกค้า LINE";
+  return {nickname,phone,comment,lineUserId,location:customerLocation,items:cart.map(x=>({productId:x.productId,optionIndex:x.optionIndex,qty:x.qty,sweetness:x.sweetness||"หวานปกติ"}))};
 }
 
 function orderText(){
@@ -235,10 +237,23 @@ async function copyOrderText(){
   try{await navigator.clipboard.writeText(text);alert("คัดลอกข้อความออเดอร์แล้ว");}
   catch(e){window.prompt("คัดลอกข้อความนี้",text);}
 }
+function jsonpOrderStatus(url){
+  return new Promise((resolve,reject)=>{
+    const cb="makhamOrderStatus_"+Date.now()+"_"+Math.random().toString(36).slice(2);
+    const script=document.createElement("script");
+    const timer=setTimeout(()=>{cleanup();reject(new Error("timeout"))},5000);
+    function cleanup(){clearTimeout(timer);script.remove();delete window[cb]}
+    window[cb]=data=>{cleanup();resolve(data)};
+    script.onerror=()=>{cleanup();reject(new Error("status error"))};
+    script.src=url+(url.includes("?")?"&":"?")+"callback="+cb;
+    document.head.appendChild(script);
+  });
+}
 function submitOrder(){
   if(!shopConfigLoaded){alert("กำลังตรวจสอบสถานะร้าน กรุณารอสักครู่แล้วลองใหม่ครับ");return;}
   const order=buildOrder();
   if(order.error){alert(order.error);return;}
+  order.clientRequestId=(window.crypto&&crypto.randomUUID)?crypto.randomUUID():("req-"+Date.now()+"-"+Math.random().toString(36).slice(2));
   const est=shippingEstimate();
   if(est.fee===null){alert(customerLocation?"ตำแหน่งนี้อยู่นอกพื้นที่จัดส่งของร้านครับ":"กรุณากด “แท็กโลเคชั่น” เพื่อระบุตำแหน่งจัดส่งก่อนสั่งซื้อ");return;}
   const btn=document.querySelector(".order-btn");
@@ -250,15 +265,32 @@ function submitOrder(){
   const input=document.createElement("input");input.name="payload";input.value=JSON.stringify(order);form.appendChild(input);document.body.appendChild(form);
   pendingOrderFrame=iframe;
   form.submit();
-  setTimeout(()=>{
-    if(pendingOrderFrame===iframe){
-      pendingOrderFrame=null;
-      iframe.remove();form.remove();
-      alert("เซิร์ฟเวอร์ใช้เวลาประมวลผลนานกว่าปกติ กรุณารอสักครู่ แล้วตรวจสอบข้อความใน LINE ก่อนกดส่งซ้ำ");
-    }
-    btn.disabled=false;
-    btn.textContent="ส่งออเดอร์ทาง LINE OA";
-  },60000);
+
+  // Recover from a slow hidden-iframe response by polling the lightweight order-status endpoint.
+  const requestId=order.clientRequestId,started=Date.now();
+  const poll=async()=>{
+    if(!pendingOrderFrame||pendingOrderFrame!==iframe)return;
+    try{
+      const check=await jsonpOrderStatus(CONFIG.BACKEND_URL+"?action=orderStatus&requestId="+encodeURIComponent(requestId));
+      if(check&&check.ready&&check.orderId&&check.paymentKey){
+        pendingOrderFrame=null;
+        latestPayment={orderId:String(check.orderId),paymentKey:String(check.paymentKey),total:Number(check.total||0),submitted:false};
+        const box=document.getElementById("paymentBox"),info=document.getElementById("paymentOrderInfo"),status=document.getElementById("paymentStatus");
+        if(info)info.textContent="Order "+latestPayment.orderId+" • ยอดชำระ "+money(latestPayment.total);
+        if(box)box.hidden=false;
+        if(status)status.textContent="ส่งออเดอร์สำเร็จแล้วครับ • สามารถชำระเงินและแนบสลิปได้";
+        btn.disabled=false;btn.textContent="ส่งออเดอร์ทาง LINE OA";
+        setTimeout(()=>{iframe.remove();form.remove()},500);
+        return;
+      }
+    }catch(e){}
+    if(Date.now()-started<15000){setTimeout(poll,700);return;}
+    if(pendingOrderFrame===iframe)pendingOrderFrame=null;
+    btn.disabled=false;btn.textContent="ส่งออเดอร์ทาง LINE OA";
+    iframe.remove();form.remove();
+    alert("ระบบยังไม่ได้รับการยืนยันออเดอร์ กรุณาตรวจสอบอินเทอร์เน็ตแล้วลองอีกครั้ง");
+  };
+  setTimeout(poll,500);
 }
 function previewSlip(input){
   const file=input.files&&input.files[0],preview=document.getElementById("slipPreview"),btn=document.getElementById("uploadSlipBtn"),status=document.getElementById("paymentStatus");
@@ -266,6 +298,18 @@ function previewSlip(input){
   if(!/^image\/(jpeg|png|webp)$/i.test(file.type)){input.value="";if(preview)preview.hidden=true;if(btn)btn.disabled=true;if(status)status.textContent="กรุณาเลือกไฟล์ JPG, PNG หรือ WEBP";return;}
   if(file.size>4*1024*1024){input.value="";if(preview)preview.hidden=true;if(btn)btn.disabled=true;if(status)status.textContent="ไฟล์ใหญ่เกิน 4 MB กรุณาเลือกรูปที่เล็กลง";return;}
   const reader=new FileReader();reader.onload=()=>{if(preview){preview.src=reader.result;preview.hidden=false;}if(btn)btn.disabled=false;if(status)status.textContent="✅ แนบสลิปแล้ว • กด “ส่ง” เพื่อส่งให้ร้าน";};reader.readAsDataURL(file);
+}
+function jsonpPaymentStatus(url){
+  return new Promise((resolve,reject)=>{
+    const cb="makhamStatus_"+Date.now()+"_"+Math.random().toString(36).slice(2);
+    const script=document.createElement("script");
+    const timer=setTimeout(()=>{cleanup();reject(new Error("timeout"))},5000);
+    function cleanup(){clearTimeout(timer);script.remove();delete window[cb]}
+    window[cb]=data=>{cleanup();resolve(data)};
+    script.onerror=()=>{cleanup();reject(new Error("status error"))};
+    script.src=url+(url.includes("?")?"&":"?")+"callback="+cb;
+    document.head.appendChild(script);
+  });
 }
 function uploadSlip(){
   if(latestPayment.submitted)return;
@@ -279,7 +323,23 @@ function uploadSlip(){
     const payload={orderId:latestPayment.orderId,key:latestPayment.paymentKey,imageData:String(reader.result||"")};
     const inputEl=document.createElement("input");inputEl.name="slipPayload";inputEl.value=JSON.stringify(payload);form.appendChild(inputEl);document.body.appendChild(form);
     pendingPaymentFrame=iframe;form.submit();
-    setTimeout(()=>{if(pendingPaymentFrame===iframe){pendingPaymentFrame=null;if(status)status.textContent="ยังไม่ได้รับผลตอบกลับจากระบบ กรุณาลองอีกครั้ง";btn.disabled=false;}iframe.remove();form.remove();},10000);
+    const started=Date.now();
+    const poll=async()=>{
+      if(latestPayment.submitted)return;
+      try{
+        const check=await jsonpPaymentStatus(CONFIG.BACKEND_URL+"?action=payment&orderId="+encodeURIComponent(latestPayment.orderId)+"&key="+encodeURIComponent(latestPayment.paymentKey));
+        if(check&&check.ok&&check.paid){
+          latestPayment.submitted=true;pendingPaymentFrame=null;
+          if(status)status.textContent="✅ ได้รับสลิปการโอนเงินของ Order "+latestPayment.orderId+" เรียบร้อยแล้วครับ";
+          btn.disabled=true;const f=iframe;setTimeout(()=>{f.remove();form.remove()},500);return;
+        }
+      }catch(e){}
+      if(Date.now()-started<15000){setTimeout(poll,700);return;}
+      if(pendingPaymentFrame===iframe)pendingPaymentFrame=null;
+      if(status)status.textContent="ยังไม่ได้รับการยืนยันจากเซิร์ฟเวอร์ กรุณาลองอีกครั้ง";
+      btn.disabled=false;iframe.remove();form.remove();
+    };
+    setTimeout(poll,500);
   };reader.readAsDataURL(file);
 }
 

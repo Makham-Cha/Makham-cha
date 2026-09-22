@@ -58,16 +58,16 @@ body{margin:0;font-family:system-ui,-apple-system,"Noto Sans Thai",sans-serif;ba
   <div class="icon">✅</div>
   <h2>ส่งสลิปเรียบร้อยแล้ว</h2>
   <div>Order <strong id="successOrder"></strong></div>
-  <div class="note" style="margin-top:8px">ทางร้านได้รับสลิปแล้ว และจะตรวจสอบยอดให้ครับ 💚</div>
+  <div class="note" style="margin-top:8px">ได้รับสลิปการโอนเงินของ Order นี้เรียบร้อยแล้วครับ 💚</div>
 </div>
-<div class="note" style="text-align:center;margin:12px 0 0">* อาจจะมีการส่งล่าช้าบ้าง เพราะทางร้านทำใหม่ทุกแก้ว ส่งด้วยใจ 💚</div>
+<div class="note" style="text-align:center;margin:12px 0 0">เมื่อส่งสำเร็จ ระบบจะแจ้งยืนยัน Order ให้ทันที 💚</div>
 <div class="small">ส่งสลิปได้ 1 ครั้งต่อออเดอร์</div>
 </main>
 <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
 <script>
 const CONFIG={
   LIFF_ID:"2011672004-mTPUoEBy",
-  BACKEND_URL:"https://script.google.com/macros/s/AKfycbw2Oc089nL65OIgSESGIIyKBO4FlFJ390iCQTMHVMfsRBx8i4NCHfwauNKsqRJVDplq/exec"
+  BACKEND_URL:"https://script.google.com/macros/s/AKfycbxehN4572vb38VvE-7FNbJlFwPChdmhuPaYIGpaENb1OCpEm3nFECWFS5oMyOTN_oba/exec"
 };
 let orderId="",paymentKey="",imageData="",submitted=false;
 const $=id=>document.getElementById(id);
@@ -87,8 +87,7 @@ function jsonp(url){
 }
 async function init(){
   try{
-    // LIFF is optional on this page; payment lookup must not depend on LIFF initialization.
-    try{ if(window.liff && CONFIG.LIFF_ID) await Promise.race([liff.init({liffId:CONFIG.LIFF_ID}),new Promise(r=>setTimeout(r,2500))]); }catch(e){}
+    // Payment lookup does not depend on LIFF initialization; skip it to keep the page fast.
     const params=new URLSearchParams(location.search);
     orderId=params.get("orderId")||"";
     paymentKey=params.get("key")||"";
@@ -146,16 +145,16 @@ $("slipFile").addEventListener("change",async e=>{
     $("submitBtn").disabled=false;
   }catch(err){imageData="";$("submitBtn").disabled=true;showError(err.message)}
 });
+function finishSlipSuccess(id){
+  submitted=true;
+  $("uploadCard").style.display="none";$("successCard").style.display="block";$("successOrder").textContent=id||orderId;
+  setTimeout(()=>{try{if(window.liff&&liff.isInClient())liff.closeWindow()}catch(err){}},1200);
+}
 window.addEventListener("message",e=>{
   const d=e.data||{};
-  if(d.source!=="makham-cha-payment"||submitted)return;
-  submitted=true;
-  if(d.ok){
-    $("uploadCard").style.display="none";$("successCard").style.display="block";$("successOrder").textContent=d.orderId||orderId;
-    setTimeout(()=>{try{if(window.liff&&liff.isInClient())liff.closeWindow()}catch(err){}},1800);
-  }else{
-    submitted=false;$("submitBtn").disabled=false;showError(d.error||"ระบบบันทึกสลิปไม่สำเร็จ กรุณาลองใหม่");
-  }
+  if(d.source!=="makham-cha-payment")return;
+  if(d.ok)finishSlipSuccess(d.orderId||orderId);
+  else if(submitted){submitted=false;$("submitBtn").disabled=false;$("submitBtn").textContent="ยืนยันและส่งสลิป";showError(d.error||"ระบบบันทึกสลิปไม่สำเร็จ กรุณาลองใหม่");}
 });
 $("submitBtn").addEventListener("click",()=>{
   if(submitted||!imageData||!orderId||!paymentKey)return;
@@ -168,24 +167,26 @@ $("submitBtn").addEventListener("click",()=>{
   input.value=JSON.stringify({orderId,key:paymentKey,imageData});
   form.appendChild(input);document.body.appendChild(form);
   form.submit();
-  setTimeout(async ()=>{
-    if(submitted){
-      // The server may have saved the slip successfully even if the iframe response is late.
-      try{
-        const check=await jsonp(CONFIG.BACKEND_URL+"?action=payment&orderId="+encodeURIComponent(orderId)+"&key="+encodeURIComponent(paymentKey));
-        if(check&&check.ok&&check.paid){
-          submitted=true;
-          $("uploadCard").style.display="none";$("successCard").style.display="block";$("successOrder").textContent=check.orderId||orderId;
-          setTimeout(()=>{try{if(window.liff&&liff.isInClient())liff.closeWindow()}catch(err){}},1200);
-          setTimeout(()=>{form.remove();iframe.remove()},1000);
-          return;
-        }
-      }catch(checkErr){}
-      submitted=false;$("submitBtn").disabled=false;$("submitBtn").textContent="ยืนยันและส่งสลิป";
-      showError("ระบบใช้เวลาประมวลผลนานกว่าปกติ ยังไม่พบการบันทึกสลิป กรุณาตรวจสอบอินเทอร์เน็ตแล้วลองอีกครั้ง");
-    }
-    setTimeout(()=>{form.remove();iframe.remove()},1000);
-  },60000);
+
+  // Do not wait for the hidden iframe response. Poll the lightweight payment status
+  // endpoint and show success as soon as PAYMENT_DONE is recorded by the server.
+  const started=Date.now();
+  const poll=async()=>{
+    if(!submitted)return;
+    try{
+      const check=await jsonp(CONFIG.BACKEND_URL+"?action=payment&orderId="+encodeURIComponent(orderId)+"&key="+encodeURIComponent(paymentKey));
+      if(check&&check.ok&&check.paid){
+        finishSlipSuccess(check.orderId||orderId);
+        setTimeout(()=>{form.remove();iframe.remove()},700);
+        return;
+      }
+    }catch(checkErr){}
+    if(Date.now()-started<15000){setTimeout(poll,700);return;}
+    submitted=false;$("submitBtn").disabled=false;$("submitBtn").textContent="ยืนยันและส่งสลิป";
+    showError("ยังไม่ได้รับการยืนยันจากเซิร์ฟเวอร์ กรุณาตรวจสอบอินเทอร์เน็ตแล้วลองอีกครั้ง");
+    setTimeout(()=>{form.remove();iframe.remove()},700);
+  };
+  setTimeout(poll,500);
 });
 init();
 </script>
