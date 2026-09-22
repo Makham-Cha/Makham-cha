@@ -66,7 +66,7 @@ body{margin:0;font-family:system-ui,-apple-system,"Noto Sans Thai",sans-serif;ba
 <script>
 const CONFIG={
   LIFF_ID:"2011672004-mTPUoEBy",
-  BACKEND_URL:"https://script.google.com/macros/s/AKfycbwC8RY2g03Koji_Bq8Lz4o4iMvE6U2-xNSwMn4qfhZ_vHBXOnW1FlcCVBJZro6e0KzjJA/exec"
+  BACKEND_URL:"https://script.google.com/macros/s/AKfycbyVNBG8xvw4ox7fWzv4JZhYxhIUgaKI4vewYSVZLi0NVN4c8CoexntwLUbLq-WZYbzorg/exec"
 };
 let orderId="",paymentKey="",imageData="",submitted=false;
 const $=id=>document.getElementById(id);
@@ -169,10 +169,10 @@ $("submitBtn").addEventListener("click",()=>{
   setTimeout(()=>{
     if(submitted){
       submitted=false;$("submitBtn").disabled=false;$("submitBtn").textContent="ยืนยันและส่งสลิป";
-      showError("ระบบใช้เวลานานกว่าปกติ กรุณาตรวจสอบอีกครั้งก่อนส่งซ้ำ");
+      showError("ระบบกำลังประมวลผลนานกว่าปกติ กรุณารอสักครู่และตรวจสอบสถานะก่อนส่งซ้ำ");
     }
     setTimeout(()=>{form.remove();iframe.remove()},1000);
-  },20000);
+  },60000);
 });
 init();
 </script>
