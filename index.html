@@ -23,7 +23,6 @@
     <section id="order" class="order-section">
       <div class="section-title">ข้อมูลสำหรับจัดส่ง</div>
       <div class="order-card">
-        <div id="orderStatus" class="order-status warning">กำลังตรวจสอบสถานะร้าน...</div>
         <div class="form-grid">
           <label>ชื่อ LINE <input id="lineNameDisplay" type="text" value="กำลังเชื่อมต่อ LINE..." readonly></label>
           <label>เบอร์ติดต่อ <span>*</span><input id="phone" type="tel" maxlength="20" placeholder="08x-xxx-xxxx" autocomplete="tel"></label>
@@ -51,8 +50,8 @@
             <input id="slipFile" type="file" accept="image/jpeg,image/png,image/webp" onchange="previewSlip(this)">
           </label>
           <img id="slipPreview" class="slip-preview" alt="ตัวอย่างสลิป" hidden>
-          <button id="uploadSlipBtn" class="upload-slip-btn" type="button" onclick="uploadSlip()" disabled>บันทึกสลิป</button>
-          <div id="paymentStatus" class="payment-status">เลือกสลิปแล้วจึงกดบันทึก</div>
+          <button id="uploadSlipBtn" class="upload-slip-btn" type="button" onclick="uploadSlip()" disabled>ส่ง</button>
+          <div id="paymentStatus" class="payment-status">เลือกสลิปแล้วจึงกดส่ง</div>
         </div>
         <div class="privacy-note">ระบบจะใช้ชื่อจากโปรไฟล์ LINE เบอร์ติดต่อ และตำแหน่งที่คุณกดยืนยันเพื่อจัดการออเดอร์นี้</div>
       </div>
