@@ -1,5 +1,5 @@
 const CONFIG = {
-  BACKEND_URL: "https://script.google.com/macros/s/AKfycbwJzHeZNmQpg3K6U6ND9rusV_F15gmfE98dfaqI47fr-a4Gf0VXwFqV0cPYCdZyEe_p/exec",
+  BACKEND_URL: "https://script.google.com/macros/s/AKfycbzRUldEHxr2Lh_bDOPylRyP6PhgJu3wW2QRHcQuY-Sa1heRkowAU1DkAneILrGCOcC1/exec",
   LIFF_ID: "2011672004-mTPUoEBy"
 };
 let lineUserId = "";
@@ -71,48 +71,21 @@ function esc(s){
 function money(n){ return "฿"+Number(n).toLocaleString("th-TH"); }
 function loadShopConfig(){
   return new Promise(resolve=>{
-    const cb="makhamConfig_"+Date.now()+"_"+Math.floor(Math.random()*10000);
-    let settled=false;
+    const cb="makhamConfig_"+Date.now()+"_"+Math.random().toString(36).slice(2);
     const script=document.createElement("script");
-    const cleanup=()=>{try{delete window[cb];}catch(e){} script.remove();};
-    const finish=(ok)=>{if(settled)return;settled=true;cleanup();resolve(ok);};
+    let done=false;
+    const finish=ok=>{if(done)return;done=true;delete window[cb];script.remove();resolve(ok);};
     window[cb]=data=>{
-      if(data&&data.ok){
-        shopConfig=data;
-        shopConfigLoaded=true;
-        finish(true);
-      }else{
-        console.error("publicConfig error",data);
-        finish(false);
-      }
+      if(data&&data.ok){shopConfig=data;shopConfigLoaded=true;finish(true);}
+      else {console.error("publicConfig error",data&&data.error);finish(false);}
     };
-    script.onerror=()=>{console.error("publicConfig network/script error");finish(false);};
     script.src=CONFIG.BACKEND_URL+"?action=publicConfig&callback="+encodeURIComponent(cb)+"&_="+Date.now();
+    script.onerror=()=>finish(false);
     document.head.appendChild(script);
-    setTimeout(()=>{
-      if(!settled){console.error("publicConfig timeout",script.src);finish(false);}
-    },10000);
+    setTimeout(()=>finish(false),15000);
   });
 }
-function applyShopStatus(){
-  const status=document.getElementById("orderStatus"),btn=document.querySelector(".order-btn");
-  if(!status)return;
-  if(!shopConfigLoaded){
-    status.className="order-status warning";
-    status.textContent="🔴 ไม่สามารถโหลดการตั้งค่าพื้นที่จัดส่งจากเซิร์ฟเวอร์ได้ กรุณาตรวจสอบการ Deploy ของ Apps Script";
-    if(btn)btn.disabled=true;
-    return;
-  }
-  if(!shopConfig.storeConfigured){
-    status.className="order-status warning";
-    status.textContent="🟡 ยังไม่ได้ตั้งค่าพิกัดร้านใน Settings";
-    if(btn)btn.disabled=true;
-    return;
-  }
-  status.className="order-status open";
-  status.textContent="🟢 พร้อมรับออเดอร์";
-  if(btn)btn.disabled=false;
-}
+
 function haversineMeters(lat1,lng1,lat2,lng2){
   const R=6371000,toRad=Math.PI/180,dLat=(lat2-lat1)*toRad,dLng=(lng2-lng1)*toRad;
   const a=Math.sin(dLat/2)**2+Math.cos(lat1*toRad)*Math.cos(lat2*toRad)*Math.sin(dLng/2)**2;
@@ -124,6 +97,14 @@ function shippingEstimate(){
   const rate=(shopConfig.shippingRates||[]).find(r=>distance<=Number(r.maxMeters));
   return {distanceMeters:distance,fee:rate?Number(rate.fee):null};
 }
+function applyShopStatus(){
+  const status=document.getElementById("orderStatus"),btn=document.querySelector(".order-btn");
+  if(!status)return;
+  if(!shopConfigLoaded){status.className="order-status warning";status.textContent="🔴 ไม่สามารถโหลดการตั้งค่าพื้นที่จัดส่งจากเซิร์ฟเวอร์ได้ กรุณารีเฟรชหน้าเว็บ";if(btn)btn.disabled=true;return;}
+  if(!shopConfig.storeConfigured){status.className="order-status warning";status.textContent="🟡 ร้านยังไม่ได้ตั้งค่าพิกัดสำหรับคำนวณค่าจัดส่ง";if(btn)btn.disabled=true;return;}
+  status.className="order-status open";status.textContent="🟢 พร้อมรับออเดอร์";if(btn)btn.disabled=false;
+}
+
 function renderShippingSummary(){
   const feeEl=document.getElementById("shippingFee"),distanceEl=document.getElementById("shippingDistance");
   if(!feeEl||!distanceEl)return;
@@ -255,11 +236,11 @@ async function copyOrderText(){
   catch(e){window.prompt("คัดลอกข้อความนี้",text);}
 }
 function submitOrder(){
-  if(!shopConfigLoaded){alert("ยังโหลดการตั้งค่าพื้นที่จัดส่งไม่สำเร็จ กรุณารีเฟรชหน้าแล้วลองใหม่ครับ");return;}
+  if(!shopConfigLoaded){alert("กำลังตรวจสอบสถานะร้าน กรุณารอสักครู่แล้วลองใหม่ครับ");return;}
   const order=buildOrder();
   if(order.error){alert(order.error);return;}
   const est=shippingEstimate();
-  if(est.fee===null){alert("กรุณาแท็กโลเคชั่นจัดส่ง และตรวจสอบว่าอยู่ในพื้นที่จัดส่งของร้านครับ");return;}
+  if(est.fee===null){alert(customerLocation?"ตำแหน่งนี้อยู่นอกพื้นที่จัดส่งของร้านครับ":"กรุณากด “แท็กโลเคชั่น” เพื่อระบุตำแหน่งจัดส่งก่อนสั่งซื้อ");return;}
   const btn=document.querySelector(".order-btn");
   if(btn.disabled)return;
   btn.disabled=true;btn.textContent="กำลังส่งออเดอร์...";
