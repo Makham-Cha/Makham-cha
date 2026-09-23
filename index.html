@@ -1,65 +1,221 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="th">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#789a63">
-  <meta name="description" content="MAKHAM CHA - เมนูมัทฉะและระบบสั่งซื้อ">
-  <title>Makham CHA — Matcha Menu & Order</title>
-  <link rel="stylesheet" href="style.css">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#567a4c" />
+  <title>Makham Cha | สั่งมัทฉะ</title>
+
+  <link rel="stylesheet" href="style.css" />
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 </head>
+
 <body>
-  <main class="app">
-    <header class="hero">
-      <div class="brand">Makham <span>CHA</span></div>
-      <div class="subtitle">Matcha Made with Love</div>
-      <div class="hero-note">เลือกสินค้า • ระบุข้อมูล • ส่งออเดอร์ทาง LINE OA</div>
-    </header>
-    <section id="product" class="product-card product-detail" aria-live="polite"></section>
-    <section class="menu-section">
-      <div class="section-title">เมนูมัทฉะ</div>
-      <div id="menu" class="menu-grid"></div>
-    </section>
-    <section id="order" class="order-section">
-      <div class="section-title">ข้อมูลสำหรับจัดส่ง</div>
-      <div class="order-card">
-        <div id="orderStatus" class="order-status warning">กำลังตรวจสอบสถานะร้าน...</div>
-        <div class="form-grid">
-          <label>ชื่อ LINE <input id="lineNameDisplay" type="text" value="กำลังเชื่อมต่อ LINE..." readonly></label>
-          <label>เบอร์ติดต่อ <span>*</span><input id="phone" type="tel" maxlength="20" placeholder="08x-xxx-xxxx" autocomplete="tel"></label>
-        </div>
-        <div class="comment-field">
-          <label>รายละเอียดเพิ่มเติม <textarea id="comment" maxlength="300" rows="3" placeholder="เช่น ขอแยกน้ำแข็ง / เพิ่มรายละเอียดอื่น ๆ"></textarea></label>
-        </div>
-        <div class="location-box">
-          <div><strong>📍 ตำแหน่งจัดส่ง</strong><div id="locationStatus" class="location-status">ยังไม่ได้ระบุตำแหน่ง</div></div>
-          <button id="locationBtn" class="location-btn" type="button" onclick="getCustomerLocation()">แท็กโลเคชั่น</button>
-        </div>
-        <div id="cart" class="cart"></div>
-        <div class="shipping-summary">
-          <div><span>ค่าสินค้า</span><strong id="subtotal">฿0</strong></div>
-          <div><span>ค่าจัดส่ง</span><strong id="shippingFee">ยังไม่คำนวณ</strong></div>
-          <div><span>ระยะทาง</span><strong id="shippingDistance">กรุณาแท็กโลเคชั่น</strong></div>
-        </div>
-        <div class="total-row"><span>ยอดชำระทั้งหมด</span><strong id="grandTotal">฿0</strong></div>
-        <button class="order-btn" type="button" onclick="submitOrder()">ส่งออเดอร์ทาง LINE OA</button>
-        <button class="copy-btn" type="button" onclick="copyOrderText()">คัดลอกข้อความออเดอร์</button>
-        <div id="paymentBox" class="payment-box" hidden>
-          <div class="payment-title">📎 แนบสลิปการโอนเงิน</div>
-          <div id="paymentOrderInfo" class="payment-info"></div>
-          <label class="slip-picker">เลือกรูปสลิป
-            <input id="slipFile" type="file" accept="image/jpeg,image/png,image/webp" onchange="previewSlip(this)">
-          </label>
-          <img id="slipPreview" class="slip-preview" alt="ตัวอย่างสลิป" hidden>
-          <button id="uploadSlipBtn" class="upload-slip-btn" type="button" onclick="uploadSlip()" disabled>ส่ง</button>
-          <div id="paymentStatus" class="payment-status">เลือกสลิปแล้วจึงกดส่ง</div>
-        </div>
-        <div class="privacy-note">ระบบจะใช้ชื่อจากโปรไฟล์ LINE เบอร์ติดต่อ และตำแหน่งที่คุณกดยืนยันเพื่อจัดการออเดอร์นี้</div>
+  <div id="loadingScreen" class="loading-screen">
+    <div class="spinner"></div>
+    <p>กำลังเปิดร้าน Makham Cha...</p>
+  </div>
+
+  <header class="header">
+    <div>
+      <p class="brand-subtitle">MATCHA DELIVERY</p>
+      <h1>Makham Cha</h1>
+    </div>
+    <button class="cart-icon-button" id="openCartBtn" aria-label="เปิดตะกร้า">
+      🛒 <span id="cartBadge">0</span>
+    </button>
+  </header>
+
+  <main class="container">
+    <section class="welcome-card">
+      <img id="profileImage" class="profile-image" src="https://via.placeholder.com/100?text=LINE" alt="รูปโปรไฟล์" />
+      <div>
+        <p class="small-text">สวัสดีคุณ</p>
+        <h2 id="profileName">กำลังโหลดข้อมูล...</h2>
+        <p class="small-text">เลือกเมนูมัทฉะที่คุณชื่นชอบได้เลย</p>
       </div>
     </section>
-    <footer><div>MAKHAM CHA</div><div>Matcha Made with Love</div></footer>
+
+    <section>
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">OUR MENU</p>
+          <h2>เมนูมัทฉะ</h2>
+        </div>
+      </div>
+      <div id="menuList" class="menu-grid"></div>
+    </section>
   </main>
-  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+
+  <div id="bottomCart" class="bottom-cart hidden">
+    <div>
+      <p id="bottomCartCount">0 รายการ</p>
+      <strong id="bottomCartTotal">฿0</strong>
+    </div>
+    <button id="goCheckoutBtn">ดูตะกร้าและสั่งซื้อ</button>
+  </div>
+
+  <!-- Modal ตะกร้า -->
+  <div id="cartModal" class="modal hidden">
+    <div class="modal-panel">
+      <div class="modal-header">
+        <h2>ตะกร้าสินค้า</h2>
+        <button class="close-btn" data-close="cartModal">×</button>
+      </div>
+
+      <div id="cartItems"></div>
+
+      <div id="emptyCartMessage" class="empty-state">
+        <p>ตะกร้ายังว่างอยู่</p>
+        <small>เลือกเมนูมัทฉะที่ต้องการก่อนนะครับ</small>
+      </div>
+
+      <div id="cartSummary" class="cart-summary hidden">
+        <div>
+          <span>ยอดค่าสินค้า</span>
+          <strong id="cartSubtotal">฿0</strong>
+        </div>
+        <button id="checkoutBtn" class="primary-btn">ดำเนินการสั่งซื้อ</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Checkout -->
+  <div id="checkoutModal" class="modal hidden">
+    <div class="modal-panel large-panel">
+      <div class="modal-header">
+        <h2>ยืนยันข้อมูลจัดส่ง</h2>
+        <button class="close-btn" data-close="checkoutModal">×</button>
+      </div>
+
+      <div class="step-label">ขั้นตอนที่ 1 จาก 2</div>
+
+      <section class="form-section">
+        <label>ชื่อผู้สั่งซื้อจาก LINE</label>
+        <div class="readonly-input">
+          <img id="checkoutProfileImage" class="mini-profile" src="" alt="Profile" />
+          <span id="checkoutProfileName">-</span>
+        </div>
+      </section>
+
+      <section class="form-section">
+        <label for="phoneInput">เบอร์โทรศัพท์ <span class="required">*</span></label>
+        <input
+          id="phoneInput"
+          type="tel"
+          inputmode="numeric"
+          maxlength="10"
+          placeholder="ตัวอย่าง 0812345678"
+        />
+        <small>กรุณากรอกเบอร์โทรศัพท์สำหรับติดต่อจัดส่ง</small>
+      </section>
+
+      <section class="form-section">
+        <label>ตำแหน่งจัดส่ง <span class="required">*</span></label>
+        <button id="locationBtn" class="secondary-btn">📍 รับตำแหน่งปัจจุบัน</button>
+        <div id="locationResult" class="location-result hidden"></div>
+      </section>
+
+      <section class="form-section">
+        <label for="noteInput">ข้อความเพิ่มเติม</label>
+        <textarea
+          id="noteInput"
+          rows="3"
+          maxlength="300"
+          placeholder="เช่น แยกน้ำแข็ง, น้ำแข็งน้อย, ไม่รับหลอด"
+        ></textarea>
+      </section>
+
+      <section class="form-section">
+        <label>สรุปรายการ</label>
+        <div id="checkoutItems" class="checkout-items"></div>
+        <div class="price-row">
+          <span>ค่าสินค้า</span>
+          <strong id="checkoutSubtotal">฿0</strong>
+        </div>
+        <div class="price-row shipping-row">
+          <span>ค่าจัดส่ง</span>
+          <strong id="checkoutShipping">รอคำนวณ</strong>
+        </div>
+        <div class="price-row grand-total">
+          <span>ยอดชำระทั้งหมด</span>
+          <strong id="checkoutTotal">฿0</strong>
+        </div>
+      </section>
+
+      <button id="createOrderBtn" class="primary-btn full-width">
+        ยืนยันคำสั่งซื้อและคำนวณค่าส่ง
+      </button>
+    </div>
+  </div>
+
+  <!-- Modal ชำระเงิน -->
+  <div id="paymentModal" class="modal hidden">
+    <div class="modal-panel large-panel">
+      <div class="modal-header">
+        <h2>ชำระเงิน</h2>
+        <button class="close-btn" data-close="paymentModal">×</button>
+      </div>
+
+      <div class="step-label">ขั้นตอนที่ 2 จาก 2</div>
+
+      <div class="payment-order-id">
+        <span>Order ID</span>
+        <strong id="paymentOrderId">-</strong>
+      </div>
+
+      <div class="payment-summary">
+        <div><span>ค่าสินค้า</span><strong id="paymentSubtotal">฿0</strong></div>
+        <div><span>ค่าจัดส่ง</span><strong id="paymentShipping">฿0</strong></div>
+        <div class="payment-total"><span>ยอดชำระทั้งหมด</span><strong id="paymentTotal">฿0</strong></div>
+      </div>
+
+      <div class="distance-box">
+        <span>ระยะทางโดยประมาณ</span>
+        <strong id="paymentDistance">-</strong>
+      </div>
+
+      <div class="qr-wrapper">
+        <div id="qrcode"></div>
+        <p>สแกน QR PromptPay เพื่อชำระเงิน</p>
+        <small>กรุณาโอนตามยอดที่แสดงเท่านั้น</small>
+      </div>
+
+      <section class="form-section">
+        <label for="slipInput">แนบสลิปการโอนเงิน <span class="required">*</span></label>
+        <input id="slipInput" type="file" accept=".jpg,.jpeg,.png,.pdf" />
+        <small>รองรับ JPG, JPEG, PNG และ PDF ขนาดไม่เกิน 5 MB</small>
+        <div id="selectedFileText" class="selected-file"></div>
+      </section>
+
+      <button id="uploadSlipBtn" class="primary-btn full-width">
+        ยืนยันการแจ้งโอนเงิน
+      </button>
+    </div>
+  </div>
+
+  <!-- Modal สำเร็จ -->
+  <div id="successModal" class="modal hidden">
+    <div class="modal-panel success-panel">
+      <div class="success-icon">✓</div>
+      <h2>ส่งหลักฐานการชำระเงินแล้ว</h2>
+      <p>ได้รับสลิปการโอนเงินแล้ว<br />เครื่องดื่มกำลังดำเนินการพร้อมส่ง</p>
+
+      <div class="success-order-box">
+        <span>Order ID</span>
+        <strong id="successOrderId">-</strong>
+        <span>ยอดชำระทั้งหมด</span>
+        <strong id="successTotal">฿0</strong>
+      </div>
+
+      <button id="closeSuccessBtn" class="primary-btn full-width">กลับไปหน้าเมนู</button>
+    </div>
+  </div>
+
+  <div id="toast" class="toast hidden"></div>
+
+  <script src="config.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

@@ -1,360 +1,525 @@
-const CONFIG = {
-  BACKEND_URL: "https://script.google.com/macros/s/AKfycbxehN4572vb38VvE-7FNbJlFwPChdmhuPaYIGpaENb1OCpEm3nFECWFS5oMyOTN_oba/exec",
-  LIFF_ID: "2011672004-mTPUoEBy"
-};
-let lineUserId = "";
-let latestPayment = {orderId:"",paymentKey:"",total:0,submitted:false};
-let pendingOrderFrame = null;
-let pendingPaymentFrame = null;
-window.addEventListener("message",event=>{
-  const data=event.data;
-  if(!data || typeof data !== "object")return;
-  if(pendingOrderFrame && data.orderId && Object.prototype.hasOwnProperty.call(data,"paymentKey")){
-    const frame=pendingOrderFrame;pendingOrderFrame=null;
-    latestPayment={orderId:String(data.orderId),paymentKey:String(data.paymentKey||""),total:Number(data.total||0),submitted:false};
-    const box=document.getElementById("paymentBox"),info=document.getElementById("paymentOrderInfo"),status=document.getElementById("paymentStatus");
-    if(data.ok){
-      if(info)info.textContent="Order "+latestPayment.orderId+" • ยอดชำระ "+money(latestPayment.total);
-      if(box)box.hidden=false;
-      if(status)status.textContent="รับออเดอร์เรียบร้อยแล้วครับ • กรุณาชำระเงินและแนบสลิปด้านล่าง";
-    }else if(status){status.textContent="ไม่สามารถสร้างข้อมูลสำหรับแนบสลิปได้: "+(data.error||"เกิดข้อผิดพลาด");}
-    setTimeout(()=>{if(frame)frame.remove();},300);
-    return;
+const MENU = [
+  {
+    code: 'MATCHA_LATTE',
+    name: 'มัทฉะ ลาเต้',
+    image: 'images/matcha-latte.jpg',
+    variants: [
+      { name: 'ธรรมดา', price: 79 },
+      { name: 'Premium', price: 99 }
+    ]
+  },
+  {
+    code: 'MATCHA_COCONUT_FOAM',
+    name: 'มัทฉะโฟมมะพร้าว',
+    image: 'images/coconut-foam.jpg',
+    variants: [{ name: 'ธรรมดา', price: 79 }]
+  },
+  {
+    code: 'MATCHA_COCONUT',
+    name: 'มัทฉะมะพร้าว',
+    image: 'images/coconut-matcha.jpg',
+    variants: [
+      { name: 'ธรรมดา', price: 79 },
+      { name: 'Premium', price: 99 }
+    ]
+  },
+  {
+    code: 'COLD_WHISK',
+    name: 'Cold Whisk',
+    image: 'images/cold-whisk.jpg',
+    variants: [
+      { name: 'ธรรมดา', price: 79 },
+      { name: 'นมโอ๊ต', price: 89 }
+    ]
+  },
+  {
+    code: 'PURE_MATCHA',
+    name: 'เพียวมัทฉะ',
+    image: 'images/pure-matcha.jpg',
+    variants: [
+      { name: 'ธรรมดา', price: 79 },
+      { name: 'Premium', price: 109 }
+    ]
   }
-  if(pendingPaymentFrame && Object.prototype.hasOwnProperty.call(data,"source") && data.source==="makham-cha-payment"){
-    const frame=pendingPaymentFrame;pendingPaymentFrame=null;
-    const status=document.getElementById("paymentStatus"),btn=document.getElementById("uploadSlipBtn"),file=document.getElementById("slipFile");
-    if(data.ok){
-      latestPayment.submitted=true;
-      if(status)status.textContent="✅ ได้รับสลิปการโอนเงินของ Order "+latestPayment.orderId+" เรียบร้อยแล้วครับ";
-      if(btn)btn.disabled=true;
-      if(file)file.disabled=true;
-    }else if(status){status.textContent="❌ ส่งสลิปไม่สำเร็จ: "+(data.error||"กรุณาลองใหม่");}
-    setTimeout(()=>{if(frame)frame.remove();},300);
-  }
-});
-async function initLiff(){
-  const nameEl=document.getElementById("lineNameDisplay");
-  if(!CONFIG.LIFF_ID || typeof liff === "undefined"){if(nameEl)nameEl.value="ลูกค้า LINE";return;}
-  try{
-    await liff.init({liffId:CONFIG.LIFF_ID});
-    if(liff.isLoggedIn()){
-      const p=await liff.getProfile();
-      lineUserId=p.userId||"";
-      if(nameEl)nameEl.value=p.displayName||"ลูกค้า LINE";
-    }else if(nameEl){nameEl.value="กรุณาเปิดผ่าน LINE";}
-  }catch(e){console.warn("LIFF init skipped",e);if(nameEl)nameEl.value="ลูกค้า LINE";}
-}
-
-const products = [
-  {id:1,name:"มัทฉะ ลาเต้",image:"images/matcha-latte.jpg",options:[{label:"ธรรมดา",price:79},{label:"Premium",price:99}]},
-  {id:2,name:"มัทฉะโฟมมะพร้าว",image:"images/coconut-foam.jpg",options:[{label:"มาตรฐาน",price:79}]},
-  {id:3,name:"มัทฉะมะพร้าว",image:"images/coconut-matcha.jpg",options:[{label:"ธรรมดา",price:79},{label:"Premium",price:99}]},
-  {id:4,name:"Cold whisk",image:"images/cold-whisk.jpg",options:[{label:"มาตรฐาน",price:79},{label:"นมโอ๊ต",price:89}]},
-  {id:5,name:"เพียวมัทฉะ",image:"images/pure-matcha.jpg",options:[{label:"มาตรฐาน",price:79},{label:"Premium",price:109}]}
 ];
 
-let cart = [];
-let customerLocation = null;
-let shopConfig = {storeConfigured:false,storeLat:null,storeLng:null,shippingRates:[]};
-let shopConfigLoaded = false;
+const SWEETNESS = ['หวานปกติ', 'หวานน้อย', 'ไม่หวาน'];
 
-const productEl = document.getElementById("product");
-const menuEl = document.getElementById("menu");
-const cartEl = document.getElementById("cart");
-const totalEl = document.getElementById("grandTotal");
+const state = {
+  profile: null,
+  cart: JSON.parse(localStorage.getItem('makhamChaCart') || '[]'),
+  latitude: null,
+  longitude: null,
+  currentOrder: null,
+  submitting: false
+};
 
-function esc(s){
-  return String(s).replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]));
-}
+document.addEventListener('DOMContentLoaded', initApp);
 
-function money(n){ return "฿"+Number(n).toLocaleString("th-TH"); }
-function loadShopConfig(){
-  return new Promise(resolve=>{
-    const cb="makhamConfig_"+Date.now()+"_"+Math.random().toString(36).slice(2);
-    const script=document.createElement("script");
-    let done=false;
-    const finish=ok=>{if(done)return;done=true;delete window[cb];script.remove();resolve(ok);};
-    window[cb]=data=>{
-      if(data&&data.ok){shopConfig=data;shopConfigLoaded=true;finish(true);}
-      else {console.error("publicConfig error",data&&data.error);finish(false);}
-    };
-    script.src=CONFIG.BACKEND_URL+"?action=publicConfig&callback="+encodeURIComponent(cb)+"&_="+Date.now();
-    script.onerror=()=>finish(false);
-    document.head.appendChild(script);
-    setTimeout(()=>finish(false),15000);
-  });
-}
-
-function haversineMeters(lat1,lng1,lat2,lng2){
-  const R=6371000,toRad=Math.PI/180,dLat=(lat2-lat1)*toRad,dLng=(lng2-lng1)*toRad;
-  const a=Math.sin(dLat/2)**2+Math.cos(lat1*toRad)*Math.cos(lat2*toRad)*Math.sin(dLng/2)**2;
-  return 2*R*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
-}
-function shippingEstimate(){
-  if(!customerLocation||!shopConfig.storeConfigured)return {distanceMeters:null,fee:null};
-  const distance=Math.round(haversineMeters(shopConfig.storeLat,shopConfig.storeLng,customerLocation.lat,customerLocation.lng));
-  const rate=(shopConfig.shippingRates||[]).find(r=>distance<=Number(r.maxMeters));
-  return {distanceMeters:distance,fee:rate?Number(rate.fee):null};
-}
-function applyShopStatus(){
-  const status=document.getElementById("orderStatus"),btn=document.querySelector(".order-btn");
-  if(!status)return;
-  if(!shopConfigLoaded){status.className="order-status warning";status.textContent="🔴 ไม่สามารถโหลดการตั้งค่าพื้นที่จัดส่งจากเซิร์ฟเวอร์ได้ กรุณารีเฟรชหน้าเว็บ";if(btn)btn.disabled=true;return;}
-  if(!shopConfig.storeConfigured){status.className="order-status warning";status.textContent="🟡 ร้านยังไม่ได้ตั้งค่าพิกัดสำหรับคำนวณค่าจัดส่ง";if(btn)btn.disabled=true;return;}
-  status.className="order-status open";status.textContent="🟢 พร้อมรับออเดอร์";if(btn)btn.disabled=false;
-}
-
-function renderShippingSummary(){
-  const feeEl=document.getElementById("shippingFee"),distanceEl=document.getElementById("shippingDistance");
-  if(!feeEl||!distanceEl)return;
-  const est=shippingEstimate();
-  if(est.fee===null){feeEl.textContent="ยังไม่คำนวณ";distanceEl.textContent=customerLocation?"ไม่อยู่ในช่วงจัดส่ง / ตรวจสอบพื้นที่":"กรุณาแท็กโลเคชั่น";return;}
-  feeEl.textContent=est.fee===0?"ฟรี":money(est.fee);
-  distanceEl.textContent=est.distanceMeters.toLocaleString("th-TH")+" เมตร";
-}
-
-function imageWithFallback(src,alt,extraClass=""){
-  return `<img class="${extraClass}" src="${src}" alt="${esc(alt)}"
-    onerror="this.style.display='none';this.nextElementSibling.style.display='block';">
-    <div class="image-placeholder" style="display:none"><div class="cup">🍵</div><div>ใส่รูปสินค้าในโฟลเดอร์ images</div></div>`;
-}
-
-function renderMenu(){
-  menuEl.innerHTML=products.map(p=>`
-    <button class="menu-item" onclick="showProduct(${p.id})" aria-label="เปิด ${esc(p.name)}">
-      ${imageWithFallback(p.image,p.name)}
-      <div class="menu-copy"><div class="menu-name">${esc(p.name)}</div>
-      <div class="menu-price">${p.options.map(o=>esc(o.label)+" "+money(o.price)).join(" / ")}</div></div>
-    </button>`).join("");
-}
-
-function showProduct(id,updateUrl=true){
-  const p=products.find(x=>x.id===Number(id))||products[0];
-  if(updateUrl) history.replaceState(null,"",`?product=${p.id}`);
-  productEl.innerHTML=`
-    <div class="product-image-wrap">${imageWithFallback(p.image,p.name,"product-image")}</div>
-    <div class="product-info">
-      <div class="product-no">รายการที่ ${p.id}</div><div class="product-name">${esc(p.name)}</div>
-      <div class="price-list">${p.options.map((o,i)=>`<div class="price">${esc(o.label)} ${money(o.price)}</div>`).join("")}</div>
-      <div class="actions product-actions"><button class="back-btn" onclick="scrollToMenu()">ดูเมนูทั้งหมด</button></div>
-      <div class="add-panel">
-        <div class="option-label">เลือกรูปแบบ</div>
-        <select id="optionSelect" aria-label="เลือกตัวเลือก">${p.options.map((o,i)=>`<option value="${i}">${esc(o.label)} — ${money(o.price)}</option>`).join("")}</select>
-        <div class="option-label">ระดับความหวาน</div>
-        <div class="sweetness-options" role="group" aria-label="ระดับความหวาน">
-          ${["หวานปกติ","หวานน้อย","ไม่หวาน"].map((sweet,i)=>`<label class="sweetness-option"><input type="checkbox" name="sweetness" value="${sweet}" ${i===0?"checked":""} onchange="selectSweetness(this)"><span>${sweet}</span></label>`).join("")}
-        </div>
-        <div class="add-row"><input id="optionQty" type="number" min="1" max="99" value="1" aria-label="จำนวน"><button class="add-btn" onclick="addToCart(${p.id})">เพิ่มลงตะกร้า</button></div>
-      </div>
-    </div>`;
-  renderMenu();
-}
-
-function scrollToMenu(){ document.querySelector(".menu-section").scrollIntoView({behavior:"smooth"}); }
-
-function selectSweetness(input){
-  document.querySelectorAll('input[name="sweetness"]').forEach(x=>{if(x!==input)x.checked=false;});
-  input.checked=true;
-}
-function currentSweetness(){const x=document.querySelector('input[name="sweetness"]:checked');return x?x.value:"หวานปกติ";}
-function addToCart(productId){
-  const p=products.find(x=>x.id===Number(productId));
-  const optionIndex=Number(document.getElementById("optionSelect").value);
-  const qty=Math.max(1,Math.min(99,Number(document.getElementById("optionQty").value)||1));
-  const sweetness=currentSweetness();
-  const key=productId+"-"+optionIndex+"-"+sweetness;
-  const found=cart.find(x=>x.key===key);
-  if(found) found.qty=Math.min(99,found.qty+qty);
-  else cart.push({key,productId:p.id,optionIndex,qty,sweetness});
-  renderCart();
-  document.getElementById("order").scrollIntoView({behavior:"smooth",block:"center"});
-}
-
-function changeQty(key,delta){
-  const item=cart.find(x=>x.key===key); if(!item)return;
-  item.qty=Math.max(0,Math.min(99,item.qty+delta));
-  if(item.qty===0) cart=cart.filter(x=>x.key!==key);
-  renderCart();
-}
-
-function removeItem(key){ cart=cart.filter(x=>x.key!==key); renderCart(); }
-
-function renderCart(){
-  if(!cart.length){cartEl.innerHTML='<div class="empty-cart">ยังไม่มีสินค้าในตะกร้า เลือกเมนูด้านบนได้เลย</div>';totalEl.textContent=money(0);renderShippingSummary();return;}
-  let subtotal=0;
-  cartEl.innerHTML=cart.map(item=>{
-    const p=products.find(x=>x.id===item.productId),o=p.options[item.optionIndex],line=o.price*item.qty; subtotal+=line;
-    return `<div class="cart-item"><div class="cart-main"><strong>${esc(p.name)}</strong><span>${esc(o.label)} · ${esc(item.sweetness||"หวานปกติ")} · ${money(o.price)}/แก้ว</span></div>
-      <div class="qty"><button onclick="changeQty('${item.key}',-1)" aria-label="ลด">−</button><b>${item.qty}</b><button onclick="changeQty('${item.key}',1)" aria-label="เพิ่ม">+</button></div>
-      <div class="line-total">${money(line)}</div><button class="remove-btn" onclick="removeItem('${item.key}')" aria-label="ลบ">×</button></div>`;
-  }).join("");
-  const est=shippingEstimate(),grand=est.fee===null?subtotal:subtotal+est.fee;
-  totalEl.textContent=money(grand);
-  const subtotalEl=document.getElementById("subtotal");if(subtotalEl)subtotalEl.textContent=money(subtotal);
-  renderShippingSummary();
-}
-
-function getCustomerLocation(){
-  const btn=document.getElementById("locationBtn"),status=document.getElementById("locationStatus");
-  if(!navigator.geolocation){status.textContent="เบราว์เซอร์ไม่รองรับการระบุตำแหน่ง";return;}
-  btn.disabled=true;btn.textContent="กำลังระบุตำแหน่ง...";
-  navigator.geolocation.getCurrentPosition(pos=>{
-    customerLocation={lat:Number(pos.coords.latitude.toFixed(7)),lng:Number(pos.coords.longitude.toFixed(7))};
-    status.innerHTML=`ระบุตำแหน่งแล้ว • ${customerLocation.lat}, ${customerLocation.lng}<br><a href="https://www.google.com/maps?q=${customerLocation.lat},${customerLocation.lng}" target="_blank" rel="noopener">เปิดดูบน Google Maps</a>`;
-    btn.disabled=false;btn.textContent="อัปเดตตำแหน่ง";
-    renderCart();
-  },err=>{
-    const msg=err.code===1?"กรุณาอนุญาตการเข้าถึงตำแหน่ง":err.code===2?"ไม่สามารถระบุตำแหน่งได้":"การระบุตำแหน่งใช้เวลานานเกินไป";
-    status.textContent=msg;btn.disabled=false;btn.textContent="ลองอีกครั้ง";
-  },{enableHighAccuracy:true,timeout:15000,maximumAge:60000});
-}
-
-function buildOrder(){
-  const phone=document.getElementById("phone").value.trim();
-  if(!phone)return {error:"กรุณากรอกเบอร์ติดต่อ"};
-  if(!cart.length)return {error:"กรุณาเลือกสินค้าอย่างน้อย 1 รายการ"};
-  const comment=document.getElementById("comment").value.trim();
-  const nameEl=document.getElementById("lineNameDisplay");
-  const nickname=(nameEl&&nameEl.value&&nameEl.value!=="กรุณาเปิดผ่าน LINE")?nameEl.value.trim():"ลูกค้า LINE";
-  return {nickname,phone,comment,lineUserId,location:customerLocation,items:cart.map(x=>({productId:x.productId,optionIndex:x.optionIndex,qty:x.qty,sweetness:x.sweetness||"หวานปกติ"}))};
-}
-
-function orderText(){
-  const o=buildOrder(); if(o.error)return o.error;
-  const lines=["🍵 MAKHAM CHA — ออเดอร์","ชื่อ LINE: "+(o.nickname||"ลูกค้า LINE"),"เบอร์ติดต่อ: "+o.phone,""];
-  let subtotal=0;
-  cart.forEach((x,i)=>{const p=products.find(a=>a.id===x.productId),op=p.options[x.optionIndex],line=op.price*x.qty;subtotal+=line;lines.push((i+1)+". "+p.name+" ("+op.label+", "+(x.sweetness||"หวานปกติ")+") x"+x.qty+" = "+money(line));});
-  const est=shippingEstimate();
-  if(o.comment)lines.push("","รายละเอียดเพิ่มเติม: "+o.comment);
-  lines.push("","ค่าสินค้า: "+money(subtotal),"ค่าจัดส่ง: "+(est.fee===0?"ฟรี":est.fee===null?"ยังไม่คำนวณ":money(est.fee)),"ยอดชำระทั้งหมด: "+money(est.fee===null?subtotal:subtotal+est.fee),o.location?"พิกัด: "+o.location.lat+", "+o.location.lng:"พิกัด: ไม่ได้ระบุ");
-  return lines.join("\n");
-}
-
-async function copyOrderText(){
-  const text=orderText();
-  if(text.startsWith("กรุณา")){alert(text);return;}
-  try{await navigator.clipboard.writeText(text);alert("คัดลอกข้อความออเดอร์แล้ว");}
-  catch(e){window.prompt("คัดลอกข้อความนี้",text);}
-}
-function jsonpOrderStatus(url){
-  return new Promise((resolve,reject)=>{
-    const cb="makhamOrderStatus_"+Date.now()+"_"+Math.random().toString(36).slice(2);
-    const script=document.createElement("script");
-    const timer=setTimeout(()=>{cleanup();reject(new Error("timeout"))},5000);
-    function cleanup(){clearTimeout(timer);script.remove();delete window[cb]}
-    window[cb]=data=>{cleanup();resolve(data)};
-    script.onerror=()=>{cleanup();reject(new Error("status error"))};
-    script.src=url+(url.includes("?")?"&":"?")+"callback="+cb;
-    document.head.appendChild(script);
-  });
-}
-function submitOrder(){
-  if(!shopConfigLoaded){alert("กำลังตรวจสอบสถานะร้าน กรุณารอสักครู่แล้วลองใหม่ครับ");return;}
-  const order=buildOrder();
-  if(order.error){alert(order.error);return;}
-  order.clientRequestId=(window.crypto&&crypto.randomUUID)?crypto.randomUUID():("req-"+Date.now()+"-"+Math.random().toString(36).slice(2));
-  const est=shippingEstimate();
-  if(est.fee===null){alert(customerLocation?"ตำแหน่งนี้อยู่นอกพื้นที่จัดส่งของร้านครับ":"กรุณากด “แท็กโลเคชั่น” เพื่อระบุตำแหน่งจัดส่งก่อนสั่งซื้อ");return;}
-  const btn=document.querySelector(".order-btn");
-  if(btn.disabled)return;
-  btn.disabled=true;btn.textContent="กำลังส่งออเดอร์...";
-  const iframeName="makhamOrderFrame_"+Date.now();
-  const iframe=document.createElement("iframe");iframe.name=iframeName;iframe.style.display="none";document.body.appendChild(iframe);
-  const form=document.createElement("form");form.method="POST";form.action=CONFIG.BACKEND_URL;form.target=iframeName;form.style.display="none";
-  const input=document.createElement("input");input.name="payload";input.value=JSON.stringify(order);form.appendChild(input);document.body.appendChild(form);
-  pendingOrderFrame=iframe;
-  form.submit();
-
-  // Recover from a slow hidden-iframe response by polling the lightweight order-status endpoint.
-  const requestId=order.clientRequestId,started=Date.now();
-  const poll=async()=>{
-    if(!pendingOrderFrame||pendingOrderFrame!==iframe)return;
-    try{
-      const check=await jsonpOrderStatus(CONFIG.BACKEND_URL+"?action=orderStatus&requestId="+encodeURIComponent(requestId));
-      if(check&&check.ready&&check.orderId&&check.paymentKey){
-        pendingOrderFrame=null;
-        latestPayment={orderId:String(check.orderId),paymentKey:String(check.paymentKey),total:Number(check.total||0),submitted:false};
-        const box=document.getElementById("paymentBox"),info=document.getElementById("paymentOrderInfo"),status=document.getElementById("paymentStatus");
-        if(info)info.textContent="Order "+latestPayment.orderId+" • ยอดชำระ "+money(latestPayment.total);
-        if(box)box.hidden=false;
-        if(status)status.textContent="ส่งออเดอร์สำเร็จแล้วครับ • สามารถชำระเงินและแนบสลิปได้";
-        btn.disabled=false;btn.textContent="ส่งออเดอร์ทาง LINE OA";
-        setTimeout(()=>{iframe.remove();form.remove()},500);
-        return;
-      }
-    }catch(e){}
-    if(Date.now()-started<15000){setTimeout(poll,700);return;}
-    if(pendingOrderFrame===iframe)pendingOrderFrame=null;
-    btn.disabled=false;btn.textContent="ส่งออเดอร์ทาง LINE OA";
-    iframe.remove();form.remove();
-    alert("ระบบยังไม่ได้รับการยืนยันออเดอร์ กรุณาตรวจสอบอินเทอร์เน็ตแล้วลองอีกครั้ง");
-  };
-  setTimeout(poll,500);
-}
-function previewSlip(input){
-  const file=input.files&&input.files[0],preview=document.getElementById("slipPreview"),btn=document.getElementById("uploadSlipBtn"),status=document.getElementById("paymentStatus");
-  if(!file){if(preview)preview.hidden=true;if(btn)btn.disabled=true;if(status)status.textContent="ยังไม่ได้แนบสลิป";return;}
-  if(!/^image\/(jpeg|png|webp)$/i.test(file.type)){input.value="";if(preview)preview.hidden=true;if(btn)btn.disabled=true;if(status)status.textContent="กรุณาเลือกไฟล์ JPG, PNG หรือ WEBP";return;}
-  if(file.size>4*1024*1024){input.value="";if(preview)preview.hidden=true;if(btn)btn.disabled=true;if(status)status.textContent="ไฟล์ใหญ่เกิน 4 MB กรุณาเลือกรูปที่เล็กลง";return;}
-  const reader=new FileReader();reader.onload=()=>{if(preview){preview.src=reader.result;preview.hidden=false;}if(btn)btn.disabled=false;if(status)status.textContent="✅ แนบสลิปแล้ว • กด “ส่ง” เพื่อส่งให้ร้าน";};reader.readAsDataURL(file);
-}
-function jsonpPaymentStatus(url){
-  return new Promise((resolve,reject)=>{
-    const cb="makhamStatus_"+Date.now()+"_"+Math.random().toString(36).slice(2);
-    const script=document.createElement("script");
-    const timer=setTimeout(()=>{cleanup();reject(new Error("timeout"))},5000);
-    function cleanup(){clearTimeout(timer);script.remove();delete window[cb]}
-    window[cb]=data=>{cleanup();resolve(data)};
-    script.onerror=()=>{cleanup();reject(new Error("status error"))};
-    script.src=url+(url.includes("?")?"&":"?")+"callback="+cb;
-    document.head.appendChild(script);
-  });
-}
-function uploadSlip(){
-  if(latestPayment.submitted)return;
-  if(!latestPayment.orderId||!latestPayment.paymentKey){alert("ยังไม่พบข้อมูลออเดอร์ กรุณาส่งออเดอร์ก่อน");return;}
-  const input=document.getElementById("slipFile"),file=input&&input.files&&input.files[0],btn=document.getElementById("uploadSlipBtn"),status=document.getElementById("paymentStatus");
-  if(!file){alert("กรุณาเลือกรูปสลิปก่อนกดส่ง");return;}
-  btn.disabled=true;if(status)status.textContent="กำลังส่งสลิป...";
-  const reader=new FileReader();reader.onload=()=>{
-    const iframeName="makhamPaymentFrame_"+Date.now(),iframe=document.createElement("iframe");iframe.name=iframeName;iframe.style.display="none";document.body.appendChild(iframe);
-    const form=document.createElement("form");form.method="POST";form.action=CONFIG.BACKEND_URL;form.target=iframeName;form.style.display="none";
-    const payload={orderId:latestPayment.orderId,key:latestPayment.paymentKey,imageData:String(reader.result||"")};
-    const inputEl=document.createElement("input");inputEl.name="slipPayload";inputEl.value=JSON.stringify(payload);form.appendChild(inputEl);document.body.appendChild(form);
-    pendingPaymentFrame=iframe;form.submit();
-    const started=Date.now();
-    const poll=async()=>{
-      if(latestPayment.submitted)return;
-      try{
-        const check=await jsonpPaymentStatus(CONFIG.BACKEND_URL+"?action=payment&orderId="+encodeURIComponent(latestPayment.orderId)+"&key="+encodeURIComponent(latestPayment.paymentKey));
-        if(check&&check.ok&&check.paid){
-          latestPayment.submitted=true;pendingPaymentFrame=null;
-          if(status)status.textContent="✅ ได้รับสลิปการโอนเงินของ Order "+latestPayment.orderId+" เรียบร้อยแล้วครับ";
-          btn.disabled=true;const f=iframe;setTimeout(()=>{f.remove();form.remove()},500);return;
-        }
-      }catch(e){}
-      if(Date.now()-started<15000){setTimeout(poll,700);return;}
-      if(pendingPaymentFrame===iframe)pendingPaymentFrame=null;
-      if(status)status.textContent="ยังไม่ได้รับการยืนยันจากเซิร์ฟเวอร์ กรุณาลองอีกครั้ง";
-      btn.disabled=false;iframe.remove();form.remove();
-    };
-    setTimeout(poll,500);
-  };reader.readAsDataURL(file);
-}
-
-async function init(){
-  await initLiff();
-  await loadShopConfig();
-  applyShopStatus();
-  renderShippingSummary();
-  const params=new URLSearchParams(location.search);
-  const selected=params.get("product");
-  if(selected) showProduct(Number(selected),false);
-  else {
-    productEl.innerHTML="";
+async function initApp() {
+  try {
     renderMenu();
+    bindEvents();
+    updateCartUI();
+    await initializeLiff();
+  } catch (error) {
+    console.error(error);
+    showToast('ไม่สามารถเปิดระบบ LINE ได้ กรุณาลองใหม่อีกครั้ง');
+  } finally {
+    document.getElementById('loadingScreen').classList.add('hidden');
   }
-  renderCart();
 }
-init();
+
+async function initializeLiff() {
+  await liff.init({ liffId: APP_CONFIG.LIFF_ID });
+
+  if (!liff.isLoggedIn()) {
+    liff.login({ redirectUri: window.location.href });
+    return;
+  }
+
+  const profile = await liff.getProfile();
+  state.profile = {
+    lineUserId: profile.userId,
+    displayName: profile.displayName,
+    pictureUrl: profile.pictureUrl || 'https://via.placeholder.com/100?text=LINE'
+  };
+
+  document.getElementById('profileName').textContent = state.profile.displayName;
+  document.getElementById('profileImage').src = state.profile.pictureUrl;
+  document.getElementById('checkoutProfileName').textContent = state.profile.displayName;
+  document.getElementById('checkoutProfileImage').src = state.profile.pictureUrl;
+}
+
+function bindEvents() {
+  document.getElementById('openCartBtn').addEventListener('click', openCart);
+  document.getElementById('goCheckoutBtn').addEventListener('click', openCart);
+  document.getElementById('checkoutBtn').addEventListener('click', openCheckout);
+  document.getElementById('locationBtn').addEventListener('click', getLocation);
+  document.getElementById('createOrderBtn').addEventListener('click', createOrder);
+  document.getElementById('uploadSlipBtn').addEventListener('click', uploadSlip);
+  document.getElementById('slipInput').addEventListener('change', showSelectedFile);
+  document.getElementById('closeSuccessBtn').addEventListener('click', resetAfterSuccess);
+
+  document.querySelectorAll('[data-close]').forEach((button) => {
+    button.addEventListener('click', () => {
+      document.getElementById(button.dataset.close).classList.add('hidden');
+    });
+  });
+}
+
+function renderMenu() {
+  const menuList = document.getElementById('menuList');
+
+  menuList.innerHTML = MENU.map((menu, index) => `
+    <article class="menu-card">
+      <img class="menu-image" src="${menu.image}" alt="${menu.name}" onerror="this.src='https://via.placeholder.com/600x400?text=Makham+Cha'" />
+      <div class="menu-content">
+        <div class="menu-title-row">
+          <h3 class="menu-title">${menu.name}</h3>
+          <span class="menu-price">เริ่ม ฿${menu.variants[0].price}</span>
+        </div>
+
+        <label for="variant-${index}">เลือกระดับเมนู</label>
+        <select id="variant-${index}">
+          ${menu.variants.map((variant) =>
+            `<option value="${variant.name}" data-price="${variant.price}">${variant.name} — ฿${variant.price}</option>`
+          ).join('')}
+        </select>
+
+        <label for="sweetness-${index}">ระดับความหวาน</label>
+        <select id="sweetness-${index}">
+          ${SWEETNESS.map((sweetness) => `<option value="${sweetness}">${sweetness}</option>`).join('')}
+        </select>
+
+        <div class="menu-actions">
+          <div class="qty-control">
+            <button type="button" onclick="changeMenuQty(${index}, -1)">−</button>
+            <span id="qty-${index}">1</span>
+            <button type="button" onclick="changeMenuQty(${index}, 1)">+</button>
+          </div>
+          <button type="button" class="add-cart-btn" onclick="addToCart(${index})">เพิ่มลงตะกร้า</button>
+        </div>
+      </div>
+    </article>
+  `).join('');
+}
+
+function changeMenuQty(index, amount) {
+  const target = document.getElementById(`qty-${index}`);
+  const nextValue = Math.max(1, Number(target.textContent) + amount);
+  target.textContent = nextValue;
+}
+
+function addToCart(menuIndex) {
+  const menu = MENU[menuIndex];
+  const variantSelect = document.getElementById(`variant-${menuIndex}`);
+  const sweetness = document.getElementById(`sweetness-${menuIndex}`).value;
+  const quantity = Number(document.getElementById(`qty-${menuIndex}`).textContent);
+  const selectedOption = variantSelect.options[variantSelect.selectedIndex];
+
+  const item = {
+    id: `${menu.code}_${selectedOption.value}_${sweetness}`,
+    menuCode: menu.code,
+    menuName: menu.name,
+    image: menu.image,
+    variant: selectedOption.value,
+    sweetness,
+    unitPrice: Number(selectedOption.dataset.price),
+    quantity
+  };
+
+  const existing = state.cart.find((cartItem) => cartItem.id === item.id);
+
+  if (existing) {
+    existing.quantity += item.quantity;
+  } else {
+    state.cart.push(item);
+  }
+
+  document.getElementById(`qty-${menuIndex}`).textContent = '1';
+  saveCart();
+  updateCartUI();
+  showToast(`เพิ่ม ${menu.name} ลงตะกร้าแล้ว`);
+}
+
+function updateCartUI() {
+  const totalQuantity = state.cart.reduce((sum, item) => sum + item.quantity, 0);
+  const subtotal = calculateSubtotal();
+
+  document.getElementById('cartBadge').textContent = totalQuantity;
+  document.getElementById('bottomCartCount').textContent = `${totalQuantity} รายการ`;
+  document.getElementById('bottomCartTotal').textContent = formatBaht(subtotal);
+
+  document.getElementById('bottomCart').classList.toggle('hidden', totalQuantity === 0);
+  renderCartItems();
+}
+
+function renderCartItems() {
+  const cartItems = document.getElementById('cartItems');
+  const emptyMessage = document.getElementById('emptyCartMessage');
+  const cartSummary = document.getElementById('cartSummary');
+
+  if (!state.cart.length) {
+    cartItems.innerHTML = '';
+    emptyMessage.classList.remove('hidden');
+    cartSummary.classList.add('hidden');
+    return;
+  }
+
+  emptyMessage.classList.add('hidden');
+  cartSummary.classList.remove('hidden');
+
+  cartItems.innerHTML = state.cart.map((item, index) => `
+    <div class="cart-item">
+      <img class="cart-item-image" src="${item.image}" alt="${item.menuName}" />
+      <div class="cart-item-info">
+        <h3>${item.menuName}</h3>
+        <p>${item.variant} · ${item.sweetness}</p>
+        <p class="cart-item-price">${formatBaht(item.unitPrice)} × ${item.quantity} = ${formatBaht(item.unitPrice * item.quantity)}</p>
+        <div class="cart-item-actions">
+          <button class="small-action-btn" onclick="changeCartQty(${index}, -1)">−</button>
+          <strong>${item.quantity}</strong>
+          <button class="small-action-btn" onclick="changeCartQty(${index}, 1)">+</button>
+          <button class="delete-btn" onclick="removeCartItem(${index})">ลบ</button>
+        </div>
+      </div>
+    </div>
+  `).join('');
+
+  document.getElementById('cartSubtotal').textContent = formatBaht(calculateSubtotal());
+}
+
+function changeCartQty(index, amount) {
+  state.cart[index].quantity += amount;
+
+  if (state.cart[index].quantity <= 0) {
+    state.cart.splice(index, 1);
+  }
+
+  saveCart();
+  updateCartUI();
+}
+
+function removeCartItem(index) {
+  state.cart.splice(index, 1);
+  saveCart();
+  updateCartUI();
+}
+
+function openCart() {
+  if (!state.cart.length) {
+    showToast('กรุณาเลือกเมนูก่อน');
+    return;
+  }
+  document.getElementById('cartModal').classList.remove('hidden');
+}
+
+function openCheckout() {
+  if (!state.cart.length) return;
+
+  document.getElementById('cartModal').classList.add('hidden');
+  renderCheckout();
+  document.getElementById('checkoutModal').classList.remove('hidden');
+}
+
+function renderCheckout() {
+  const subtotal = calculateSubtotal();
+
+  document.getElementById('checkoutItems').innerHTML = state.cart.map((item) => `
+    <div class="checkout-item-row">
+      <span>${item.menuName} (${item.variant}, ${item.sweetness}) × ${item.quantity}</span>
+      <strong>${formatBaht(item.unitPrice * item.quantity)}</strong>
+    </div>
+  `).join('');
+
+  document.getElementById('checkoutSubtotal').textContent = formatBaht(subtotal);
+  document.getElementById('checkoutShipping').textContent = 'รอคำนวณ';
+  document.getElementById('checkoutTotal').textContent = formatBaht(subtotal);
+}
+
+function getLocation() {
+  if (!navigator.geolocation) {
+    showToast('อุปกรณ์นี้ไม่รองรับการระบุตำแหน่ง');
+    return;
+  }
+
+  const button = document.getElementById('locationBtn');
+  button.disabled = true;
+  button.textContent = 'กำลังรับตำแหน่ง...';
+
+  navigator.geolocation.getCurrentPosition(
+    (position) => {
+      state.latitude = position.coords.latitude;
+      state.longitude = position.coords.longitude;
+
+      const result = document.getElementById('locationResult');
+      result.innerHTML = `
+        <strong>รับตำแหน่งสำเร็จ</strong><br>
+        Latitude: ${state.latitude.toFixed(6)}<br>
+        Longitude: ${state.longitude.toFixed(6)}
+      `;
+      result.classList.remove('hidden');
+
+      button.disabled = false;
+      button.textContent = '📍 รับตำแหน่งปัจจุบันอีกครั้ง';
+      showToast('รับตำแหน่งจัดส่งสำเร็จ');
+    },
+    (error) => {
+      button.disabled = false;
+      button.textContent = '📍 รับตำแหน่งปัจจุบัน';
+      showToast('ไม่สามารถรับตำแหน่งได้ กรุณาอนุญาตการเข้าถึงตำแหน่ง');
+      console.error(error);
+    },
+    { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+  );
+}
+
+async function createOrder() {
+  if (state.submitting) return;
+
+  const phone = document.getElementById('phoneInput').value.trim();
+  const note = document.getElementById('noteInput').value.trim();
+
+  if (!state.profile?.lineUserId) {
+    showToast('ไม่พบข้อมูล LINE กรุณาเปิดผ่าน LINE OA');
+    return;
+  }
+
+  if (!/^0\d{8,9}$/.test(phone)) {
+    showToast('กรุณากรอกเบอร์โทรศัพท์ให้ถูกต้อง');
+    return;
+  }
+
+  if (state.latitude === null || state.longitude === null) {
+    showToast('กรุณากดรับตำแหน่งจัดส่งก่อน');
+    return;
+  }
+
+  setSubmitting('createOrderBtn', true, 'กำลังคำนวณและสร้างคำสั่งซื้อ...');
+
+  try {
+    const response = await callApi('createOrder', {
+      profile: state.profile,
+      phone,
+      latitude: state.latitude,
+      longitude: state.longitude,
+      customerNote: note,
+      items: state.cart
+    });
+
+    if (!response.success) {
+      throw new Error(response.message || 'ไม่สามารถสร้างคำสั่งซื้อได้');
+    }
+
+    state.currentOrder = response.order;
+    showPayment(response.order);
+    document.getElementById('checkoutModal').classList.add('hidden');
+  } catch (error) {
+    console.error(error);
+    showToast(error.message || 'เกิดข้อผิดพลาดในการสร้างคำสั่งซื้อ');
+  } finally {
+    setSubmitting('createOrderBtn', false, 'ยืนยันคำสั่งซื้อและคำนวณค่าส่ง');
+  }
+}
+
+function showPayment(order) {
+  document.getElementById('paymentOrderId').textContent = order.orderId;
+  document.getElementById('paymentSubtotal').textContent = formatBaht(order.itemsSubtotal);
+  document.getElementById('paymentShipping').textContent = formatBaht(order.shippingFee);
+  document.getElementById('paymentTotal').textContent = formatBaht(order.grandTotal);
+  document.getElementById('paymentDistance').textContent = `${Number(order.distanceMeters).toLocaleString()} เมตร`;
+
+  const qrElement = document.getElementById('qrcode');
+  qrElement.innerHTML = '';
+
+  new QRCode(qrElement, {
+    text: order.promptPayPayload,
+    width: 205,
+    height: 205,
+    colorDark: '#1d3021',
+    colorLight: '#ffffff',
+    correctLevel: QRCode.CorrectLevel.M
+  });
+
+  document.getElementById('paymentModal').classList.remove('hidden');
+}
+
+function showSelectedFile() {
+  const file = document.getElementById('slipInput').files[0];
+  document.getElementById('selectedFileText').textContent = file ? `ไฟล์ที่เลือก: ${file.name}` : '';
+}
+
+async function uploadSlip() {
+  if (state.submitting) return;
+
+  const file = document.getElementById('slipInput').files[0];
+
+  if (!state.currentOrder?.orderId) {
+    showToast('ไม่พบข้อมูลคำสั่งซื้อ กรุณาลองใหม่');
+    return;
+  }
+
+  if (!file) {
+    showToast('กรุณาเลือกไฟล์สลิปการโอนเงิน');
+    return;
+  }
+
+  const allowedTypes = ['image/jpeg', 'image/png', 'application/pdf'];
+
+  if (!allowedTypes.includes(file.type)) {
+    showToast('รองรับเฉพาะไฟล์ JPG, JPEG, PNG และ PDF');
+    return;
+  }
+
+  if (file.size > 5 * 1024 * 1024) {
+    showToast('ไฟล์มีขนาดเกิน 5 MB');
+    return;
+  }
+
+  setSubmitting('uploadSlipBtn', true, 'กำลังอัปโหลดสลิป...');
+
+  try {
+    const base64 = await fileToBase64(file);
+
+    const response = await callApi('uploadSlip', {
+      orderId: state.currentOrder.orderId,
+      lineUserId: state.profile.lineUserId,
+      fileName: file.name,
+      mimeType: file.type,
+      base64Data: base64
+    });
+
+    if (!response.success) {
+      throw new Error(response.message || 'ไม่สามารถอัปโหลดสลิปได้');
+    }
+
+    document.getElementById('paymentModal').classList.add('hidden');
+    document.getElementById('successOrderId').textContent = state.currentOrder.orderId;
+    document.getElementById('successTotal').textContent = formatBaht(state.currentOrder.grandTotal);
+    document.getElementById('successModal').classList.remove('hidden');
+  } catch (error) {
+    console.error(error);
+    showToast(error.message || 'เกิดข้อผิดพลาดในการอัปโหลดสลิป');
+  } finally {
+    setSubmitting('uploadSlipBtn', false, 'ยืนยันการแจ้งโอนเงิน');
+  }
+}
+
+async function callApi(action, payload) {
+  if (!APP_CONFIG.API_URL || APP_CONFIG.API_URL.includes('YOUR_GOOGLE')) {
+    throw new Error('กรุณาตั้งค่า API_URL ในไฟล์ config.js ก่อนใช้งาน');
+  }
+
+  const response = await fetch(APP_CONFIG.API_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify({ action, payload })
+  });
+
+  return response.json();
+}
+
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+
+    reader.onload = () => {
+      const result = String(reader.result);
+      resolve(result.split(',')[1]);
+    };
+
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+function calculateSubtotal() {
+  return state.cart.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
+}
+
+function saveCart() {
+  localStorage.setItem('makhamChaCart', JSON.stringify(state.cart));
+}
+
+function formatBaht(amount) {
+  return `฿${Number(amount || 0).toLocaleString('th-TH')}`;
+}
+
+function setSubmitting(buttonId, isSubmitting, label) {
+  state.submitting = isSubmitting;
+  const button = document.getElementById(buttonId);
+  button.disabled = isSubmitting;
+  button.textContent = label;
+}
+
+function showToast(message) {
+  const toast = document.getElementById('toast');
+  toast.textContent = message;
+  toast.classList.remove('hidden');
+
+  clearTimeout(window.toastTimer);
+  window.toastTimer = setTimeout(() => toast.classList.add('hidden'), 3500);
+}
+
+function resetAfterSuccess() {
+  state.cart = [];
+  state.currentOrder = null;
+  state.latitude = null;
+  state.longitude = null;
+
+  localStorage.removeItem('makhamChaCart');
+  document.getElementById('phoneInput').value = '';
+  document.getElementById('noteInput').value = '';
+  document.getElementById('slipInput').value = '';
+  document.getElementById('selectedFileText').textContent = '';
+  document.getElementById('locationResult').classList.add('hidden');
+  document.getElementById('successModal').classList.add('hidden');
+
+  updateCartUI();
+}
+
+window.changeMenuQty = changeMenuQty;
+window.addToCart = addToCart;
+window.changeCartQty = changeCartQty;
+window.removeCartItem = removeCartItem;
