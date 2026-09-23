@@ -172,11 +172,11 @@ button {
 .menu-image {
   display: block;
   width: 100%;
-  height: 260px;
+  height: auto;
   background: #e9eee6;
-  object-fit: cover;
-  object-position: center;
+  object-fit: contain;
 }
+
 
 
 .menu-content {
