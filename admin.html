@@ -75,7 +75,32 @@
     <section class="order-table-card">
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; flex-wrap:wrap; gap:10px;">
         <h2 style="margin:0; font-size:18px;">รายการคำสั่งซื้อล่าสุด</h2>
-        <select id="filterStatus" class="action-select" onchange="renderOrdersTable()">
+        
+        <!-- เพิ่มส่วนนี้สำหรับเลือกกรองวันที่/เดือน/ปี -->
+        <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+          <select id="filterYear" class="action-select" onchange="filterOrdersTable()">
+            <option value="ALL">ทุกปี</option>
+          </select>
+          <select id="filterMonth" class="action-select" onchange="filterOrdersTable()">
+            <option value="ALL">ทุกเดือน</option>
+            <option value="01">มกราคม</option>
+            <option value="02">กุมภาพันธ์</option>
+            <option value="03">มีนาคม</option>
+            <option value="04">เมษายน</option>
+            <option value="05">พฤษภาคม</option>
+            <option value="06">มิถุนายน</option>
+            <option value="07">กรกฎาคม</option>
+            <option value="08">สิงหาคม</option>
+            <option value="09">กันยายน</option>
+            <option value="10">ตุลาคม</option>
+            <option value="11">พฤศจิกายน</option>
+            <option value="12">ธันวาคม</option>
+          </select>
+          <input type="date" id="filterDate" class="action-select" onchange="filterOrdersTable()" style="padding: 5px 10px;" />
+          <button class="primary-btn" onclick="resetFilter()" style="padding: 6px 12px; font-size: 12px; background: #718096;">ล้างตัวกรอง</button>
+        </div>
+
+        <select id="filterStatus" class="action-select" onchange="filterOrdersTable()">
           <option value="ALL">ทุกสถานะ</option>
           <option value="SLIP_UPLOADED">รอตรวจสอบสลิป</option>
           <option value="PREPARING">กำลังเตรียมเครื่องดื่ม</option>
@@ -120,7 +145,9 @@
 
         allOrders = response.orders || [];
         updateStats(allOrders);
-        renderOrdersTable();
+        initDateFilters(allOrders); // <--- เพิ่มบรรทัดนี้เพื่อให้ตัวเลือกปีดึงข้อมูลจากออเดอร์จริง
+        filterOrdersTable();        // <--- เปลี่ยนจาก renderOrdersTable เป็นตัวนี้
+
 
         document.getElementById('lastUpdateText').textContent = `อัปเดตล่าสุด: ${new Date().toLocaleTimeString('th-TH')}`;
       } catch (error) {
@@ -166,20 +193,65 @@
       document.getElementById('statPendingOrders').textContent = pendingCount;
     }
 
-    function renderOrdersTable() {
+    // เรียกใช้ตอนโหลดข้อมูลเสร็จ เพื่อสร้างรายชื่อปีใน Dropdown
+    function initDateFilters(orders) {
+      const yearSelect = document.getElementById('filterYear');
+      const years = [...new Set(orders.map(o => String(o.createdAt).substring(0, 4)))].filter(y => y.length === 4);
+      years.sort((a, b) => b - a); // เรียงปีจากใหม่ไปเก่า
+
+      yearSelect.innerHTML = '<option value="ALL">ทุกปี</option>' + 
+        years.map(y => `<option value="${y}">${Number(y) + 543}</option>`).join('');
+    }
+
+    function filterOrdersTable() {
+      const statusFilter = document.getElementById('filterStatus').value;
+      const yearFilter = document.getElementById('filterYear').value;
+      const monthFilter = document.getElementById('filterMonth').value;
+      const dateFilter = document.getElementById('filterDate').value; // รูปแบบ YYYY-MM-DD จาก input date
+
+      const filtered = allOrders.filter(order => {
+        // order.createdAt คาดว่าเป็นรูปแบบ "YYYY-MM-DD HH:mm:ss" หรือ "YYYY-MM-DD"
+        const orderDateStr = String(order.createdAt || '');
+        const orderYear = orderDateStr.substring(0, 4);
+        const orderMonth = orderDateStr.substring(5, 7);
+        const orderDay = orderDateStr.substring(0, 10);
+
+        // เช็คเงื่อนไขสถานะ
+        const matchStatus = (statusFilter === 'ALL' || order.status === statusFilter);
+        
+        // เช็คเงื่อนไขปี
+        const matchYear = (yearFilter === 'ALL' || orderYear === yearFilter);
+        
+        // เช็คเงื่อนไขเดือน
+        const matchMonth = (monthFilter === 'ALL' || orderMonth === monthFilter);
+        
+        // เช็คเงื่อนไขระบุวันเจาะจง
+        const matchDate = (!dateFilter || orderDay === dateFilter);
+
+        return matchStatus && matchYear && matchMonth && matchDate;
+      });
+
+      renderOrdersList(filtered);
+    }
+
+    function resetFilter() {
+      document.getElementById('filterStatus').value = 'ALL';
+      document.getElementById('filterYear').value = 'ALL';
+      document.getElementById('filterMonth').value = 'ALL';
+      document.getElementById('filterDate').value = '';
+      filterOrdersTable();
+    }
+
+    // เปลี่ยนชื่อจาก renderOrdersTable เดิมเป็นฟังก์ชันนี้
+    function renderOrdersList(ordersToRender) {
       const container = document.getElementById('ordersListContainer');
-      const filter = document.getElementById('filterStatus').value;
 
-      const filtered = filter === 'ALL' 
-        ? allOrders 
-        : allOrders.filter(o => o.status === filter);
-
-      if (!filtered.length) {
-        container.innerHTML = `<p style="text-align:center; color:var(--muted); padding:30px 0;">ไม่พบรายการคำสั่งซื้อ</p>`;
+      if (!ordersToRender.length) {
+        container.innerHTML = `<p style="text-align:center; color:var(--muted); padding:30px 0;">ไม่พบรายการคำสั่งซื้อตามเงื่อนไขที่เลือก</p>`;
         return;
       }
 
-      container.innerHTML = filtered.map(order => `
+      container.innerHTML = ordersToRender.map(order => `
         <div class="order-row">
           <div>
             <strong>${order.orderId}</strong><br>
