@@ -172,12 +172,10 @@ button {
 .menu-image {
   display: block;
   width: 100%;
-  height: auto;
+  height: 185px;
   background: #e9eee6;
-  object-fit: contain;
+  object-fit: cover;
 }
-
-
 
 .menu-content {
   padding: 16px;
@@ -731,4 +729,45 @@ button {
     margin: auto;
     border-radius: 20px;
   }
+}
+
+
+.store-status-banner {
+  width: min(calc(100% - 40px), 720px);
+  margin: 16px auto 0;
+  padding: 13px 16px;
+  border: 1px solid #efc7c2;
+  border-radius: 12px;
+  background: #fff1ef;
+  color: #9d3a32;
+}
+
+.store-status-banner strong,
+.store-status-banner span {
+  display: block;
+}
+
+.store-status-banner strong {
+  margin-bottom: 3px;
+}
+
+.store-status-banner span {
+  font-size: 13px;
+}
+
+.store-closed-overlay {
+  position: relative;
+  overflow: hidden;
+}
+
+.store-closed-overlay::after {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(255, 255, 255, 0.72);
+  color: #9d3a32;
+  content: "ร้านปิดรับออเดอร์";
+  font-size: 18px;
+  font-weight: 800;
 }

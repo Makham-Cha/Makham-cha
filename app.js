@@ -51,7 +51,11 @@ const state = {
   latitude: null,
   longitude: null,
   currentOrder: null,
-  submitting: false
+  submitting: false,
+  storeStatus: {
+    isOpen: true,
+    message: ''
+  }
 };
 
 document.addEventListener('DOMContentLoaded', initApp);
@@ -61,7 +65,11 @@ async function initApp() {
     renderMenu();
     bindEvents();
     updateCartUI();
-    await initializeLiff();
+
+    await Promise.all([
+      initializeLiff(),
+      loadStoreStatus()
+    ]);
   } catch (error) {
     console.error(error);
     showToast('ไม่สามารถเปิดระบบ LINE ได้ กรุณาลองใหม่อีกครั้ง');
@@ -90,6 +98,59 @@ async function initializeLiff() {
   document.getElementById('checkoutProfileName').textContent = state.profile.displayName;
   document.getElementById('checkoutProfileImage').src = state.profile.pictureUrl;
 }
+
+
+async function loadStoreStatus() {
+  try {
+    const response = await callApi('getStoreStatus', {});
+
+    if (!response.success) {
+      throw new Error(response.message || 'ไม่สามารถตรวจสอบสถานะร้านได้');
+    }
+
+    state.storeStatus = {
+      isOpen: response.isOpen,
+      message: response.message || ''
+    };
+
+    applyStoreStatusUI();
+  } catch (error) {
+    console.error(error);
+
+    // กรณีตรวจสอบสถานะร้านไม่ได้ ให้ปิดการสั่งซื้อเพื่อความปลอดภัย
+    state.storeStatus = {
+      isOpen: false,
+      message: 'ไม่สามารถตรวจสอบสถานะร้านได้ กรุณาลองใหม่ภายหลัง'
+    };
+
+    applyStoreStatusUI();
+  }
+}
+
+function applyStoreStatusUI() {
+  const banner = document.getElementById('storeStatusBanner');
+  const title = document.getElementById('storeStatusTitle');
+  const message = document.getElementById('storeStatusMessage');
+  const menuList = document.getElementById('menuList');
+
+  const isOpen = state.storeStatus.isOpen;
+
+  banner.classList.toggle('hidden', isOpen);
+  menuList.classList.toggle('store-closed-overlay', !isOpen);
+
+  if (!isOpen) {
+    title.textContent = 'ขณะนี้ร้านปิดรับออเดอร์';
+    message.textContent = state.storeStatus.message || 'กรุณากลับมาใช้บริการใหม่ในภายหลัง';
+  }
+
+  document.querySelectorAll('.add-cart-btn').forEach((button) => {
+    button.disabled = !isOpen;
+  });
+
+  document.getElementById('goCheckoutBtn').disabled = !isOpen;
+  document.getElementById('checkoutBtn').disabled = !isOpen;
+}
+
 
 function bindEvents() {
   document.getElementById('openCartBtn').addEventListener('click', openCart);
@@ -152,6 +213,11 @@ function changeMenuQty(index, amount) {
 }
 
 function addToCart(menuIndex) {
+  if (!state.storeStatus.isOpen) {
+    showToast('ขณะนี้ร้านปิดรับออเดอร์');
+    return;
+  }
+
   const menu = MENU[menuIndex];
   const variantSelect = document.getElementById(`variant-${menuIndex}`);
   const sweetness = document.getElementById(`sweetness-${menuIndex}`).value;
@@ -256,6 +322,11 @@ function openCart() {
 }
 
 function openCheckout() {
+  if (!state.storeStatus.isOpen) {
+    showToast('ขณะนี้ร้านปิดรับออเดอร์');
+    return;
+  }
+
   if (!state.cart.length) return;
 
   document.getElementById('cartModal').classList.add('hidden');
