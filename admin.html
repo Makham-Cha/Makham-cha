@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#567a4c" />
+  <title>Makham Cha | แดชบอร์ดแอดมิน</title>
+  <link rel="stylesheet" href="style.css" />
+  <style>
+    .admin-container { width: min(100%, 960px); margin: auto; padding: 20px; }
+    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; margin-bottom: 24px; }
+    .stat-card { background: white; border: 1px solid var(--line); border-radius: 16px; padding: 18px; box-shadow: 0 3px 10px rgba(0,0,0,0.03); }
+    .stat-card p { margin: 0 0 6px; color: var(--muted); font-size: 13px; font-weight: 600; }
+    .stat-card h3 { margin: 0; color: var(--dark-green); font-size: 24px; }
+    .control-panel { display: flex; justify-content: space-between; align-items: center; background: white; border: 1px solid var(--line); border-radius: 16px; padding: 16px 20px; margin-bottom: 24px; gap: 12px; flex-wrap: wrap; }
+    .status-toggle-btn { padding: 10px 18px; border-radius: 10px; font-weight: 700; cursor: pointer; border: 0; }
+    .status-open { background: #dcebd7; color: var(--dark-green); }
+    .status-closed { background: #fff1ef; color: var(--danger); }
+    .order-table-card { background: white; border: 1px solid var(--line); border-radius: 16px; padding: 20px; box-shadow: 0 3px 10px rgba(0,0,0,0.03); overflow-x: auto; }
+    .order-row { display: grid; grid-template-columns: 1.2fr 1.2fr 1.5fr 1fr 1fr auto; gap: 12px; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--line); font-size: 14px; min-width: 750px; }
+    .order-header-row { font-weight: 700; color: var(--muted); font-size: 12px; }
+    .badge { display: inline-block; padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: 700; text-align: center; }
+    .badge-pending { background: #fff4e5; color: #b7791f; }
+    .badge-uploaded { background: #ebf8ff; color: #3182ce; }
+    .badge-preparing { background: #fefcbf; color: #b7791f; }
+    .badge-delivery { background: #e9f1e5; color: var(--dark-green); }
+    .badge-completed { background: #c6f6d5; color: #22543d; }
+    .badge-cancelled { background: #fed7d7; color: #9b2c2c; }
+    .action-select { padding: 6px 10px; border-radius: 8px; border: 1px solid #d4d9d2; background: white; font-size: 13px; }
+    .slip-link { color: var(--green); text-decoration: none; font-weight: 600; }
+    .slip-link:hover { text-decoration: underline; }
+    .btn-group { display: flex; gap: 8px; }
+  </style>
+  <!-- SheetJS สำหรับสร้างไฟล์ Excel ฝั่ง Client -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+</head>
+<body>
+  <header class="header">
+    <div>
+      <p class="brand-subtitle">ADMIN DASHBOARD</p>
+      <h1>Makham Cha ร้านค้า</h1>
+    </div>
+    <div class="btn-group">
+      <button class="primary-btn" onclick="exportToExcel()" style="padding: 10px 14px; font-size: 13px; background: #2f3d2d;">📥 Export Excel</button>
+      <button class="primary-btn" onclick="loadDashboardData()" style="padding: 10px 14px; font-size: 13px;">🔄 รีเฟรช</button>
+    </div>
+  </header>
+
+  <main class="admin-container">
+    <div class="control-panel">
+      <div>
+        <h2 id="storeNameDisplay" style="margin:0 0 4px; font-size:18px;">Makham Cha</h2>
+        <p id="lastUpdateText" class="small-text" style="margin:0;">กำลังโหลดสถานะ...</p>
+      </div>
+      <div>
+        <button id="toggleStoreBtn" class="status-toggle-btn" onclick="toggleStoreStatus()">กำลังตรวจสอบ...</button>
+      </div>
+    </div>
+
+    <div class="stats-grid">
+      <div class="stat-card">
+        <p>ออเดอร์ทั้งหมดวันนี้</p>
+        <h3 id="statTotalOrders">0</h3>
+      </div>
+      <div class="stat-card">
+        <p>ยอดขายรวมวันนี้</p>
+        <h3 id="statTotalSales">฿0</h3>
+      </div>
+      <div class="stat-card">
+        <p>รอตรวจสอบ/เตรียมจัดส่ง</p>
+        <h3 id="statPendingOrders">0</h3>
+      </div>
+    </div>
+
+    <section class="order-table-card">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; flex-wrap:wrap; gap:10px;">
+        <h2 style="margin:0; font-size:18px;">รายการคำสั่งซื้อล่าสุด</h2>
+        <select id="filterStatus" class="action-select" onchange="renderOrdersTable()">
+          <option value="ALL">ทุกสถานะ</option>
+          <option value="SLIP_UPLOADED">รอตรวจสอบสลิป</option>
+          <option value="PREPARING">กำลังเตรียมเครื่องดื่ม</option>
+          <option value="OUT_FOR_DELIVERY">กำลังจัดส่ง</option>
+          <option value="COMPLETED">สำเร็จแล้ว</option>
+        </select>
+      </div>
+
+      <div class="order-row order-header-row">
+        <span>Order ID / เวลา</span>
+        <span>ลูกค้า / เบอร์โทร</span>
+        <span>รายการสินค้า</span>
+        <span>ยอดชำระ</span>
+        <span>สถานะ</span>
+        <span>จัดการ / สลิป</span>
+      </div>
+      <div id="ordersListContainer">
+        <p style="text-align:center; color:var(--muted); padding:30px 0;">กำลังโหลดข้อมูลคำสั่งซื้อ...</p>
+      </div>
+    </section>
+  </main>
+
+  <div id="toast" class="toast hidden"></div>
+
+  <script src="config.js"></script>
+  <script>
+    let allOrders = [];
+    let currentStoreIsOpen = true;
+
+    document.addEventListener('DOMContentLoaded', () => {
+      loadDashboardData();
+      setInterval(loadDashboardData, 30000);
+    });
+
+    async function loadDashboardData() {
+      try {
+        const response = await callApi('getDashboardData', {});
+        if (!response.success) throw new Error(response.message || 'ไม่สามารถโหลดข้อมูลได้');
+
+        currentStoreIsOpen = response.storeIsOpen;
+        updateStoreStatusUI(currentStoreIsOpen);
+
+        allOrders = response.orders || [];
+        updateStats(allOrders);
+        renderOrdersTable();
+
+        document.getElementById('lastUpdateText').textContent = `อัปเดตล่าสุด: ${new Date().toLocaleTimeString('th-TH')}`;
+      } catch (error) {
+        console.error(error);
+        showToast('ไม่สามารถดึงข้อมูลแดชบอร์ดได้');
+      }
+    }
+
+    function updateStoreStatusUI(isOpen) {
+      const btn = document.getElementById('toggleStoreBtn');
+      if (isOpen) {
+        btn.className = 'status-toggle-btn status-open';
+        btn.textContent = '🟢 เปิดรับออเดอร์อยู่ (คลิกเพื่อปิดร้าน)';
+      } else {
+        btn.className = 'status-toggle-btn status-closed';
+        btn.textContent = '🔴 ปิดรับออเดอร์อยู่ (คลิกเพื่อเปิดร้าน)';
+      }
+    }
+
+    async function toggleStoreStatus() {
+      const newStatus = currentStoreIsOpen ? 'CLOSED' : 'OPEN';
+      try {
+        const response = await callApi('updateStoreStatus', { status: newStatus });
+        if (!response.success) throw new Error(response.message);
+        currentStoreIsOpen = (newStatus === 'OPEN');
+        updateStoreStatusUI(currentStoreIsOpen);
+        showToast(currentStoreIsOpen ? 'เปิดร้านรับออเดอร์แล้ว' : 'ปิดรับออเดอร์แล้ว');
+      } catch (error) {
+        console.error(error);
+        showToast('ไม่สามารถเปลี่ยนสถานะร้านได้');
+      }
+    }
+
+    function updateStats(orders) {
+      const today = new Date().toISOString().split('T')[0];
+      const todayOrders = orders.filter(o => String(o.createdAt).startsWith(today) && o.status !== 'CANCELLED');
+      
+      const totalSales = todayOrders.reduce((sum, o) => sum + Number(o.grandTotal || 0), 0);
+      const pendingCount = orders.filter(o => ['SLIP_UPLOADED', 'PAYMENT_VERIFIED', 'PREPARING'].includes(o.status)).length;
+
+      document.getElementById('statTotalOrders').textContent = todayOrders.length;
+      document.getElementById('statTotalSales').textContent = `฿${totalSales.toLocaleString('th-TH')}`;
+      document.getElementById('statPendingOrders').textContent = pendingCount;
+    }
+
+    function renderOrdersTable() {
+      const container = document.getElementById('ordersListContainer');
+      const filter = document.getElementById('filterStatus').value;
+
+      const filtered = filter === 'ALL' 
+        ? allOrders 
+        : allOrders.filter(o => o.status === filter);
+
+      if (!filtered.length) {
+        container.innerHTML = `<p style="text-align:center; color:var(--muted); padding:30px 0;">ไม่พบรายการคำสั่งซื้อ</p>`;
+        return;
+      }
+
+      container.innerHTML = filtered.map(order => `
+        <div class="order-row">
+          <div>
+            <strong>${order.orderId}</strong><br>
+            <span style="color:var(--muted); font-size:12px;">${order.createdAt}</span>
+          </div>
+          <div>
+            <strong>${order.customerName}</strong><br>
+            <span style="color:var(--muted); font-size:12px;">📞 ${order.phone || '-'}</span>
+          </div>
+          <div style="font-size:13px;">
+            ${(order.items || []).map(i => `• ${i.menuName} (${i.variant}) × ${i.quantity}`).join('<br>')}
+            <div style="color:var(--muted); margin-top:2px;">หมายเหตุ: ${order.customerNote || '-'}</div>
+          </div>
+          <div>
+            <strong>฿${Number(order.grandTotal).toLocaleString()}</strong><br>
+            <span style="font-size:11px; color:var(--muted);">ค่าส่ง ฿${order.shippingFee}</span>
+          </div>
+          <div>
+            <span class="badge ${getStatusBadgeClass(order.status)}">${translateStatus(order.status)}</span>
+          </div>
+          <div style="display:flex; flex-direction:column; gap:6px;">
+            ${order.paymentSlipUrl ? `<a class="slip-link" href="${order.paymentSlipUrl}" target="_blank">📄 ดูสลิป</a>` : '<span style="color:var(--muted); font-size:12px;">ยังไม่แนบสลิป</span>'}
+            <select class="action-select" onchange="changeOrderStatus('${order.orderId}', this.value)">
+              <option value="" disabled selected>เปลี่ยนสถานะ...</option>
+              <option value="PREPARING">👨‍🍳 กำลังทำ</option>
+              <option value="OUT_FOR_DELIVERY">🛵 กำลังส่ง</option>
+              <option value="COMPLETED">✅ สำเร็จ</option>
+              <option value="CANCELLED">❌ ยกเลิก</option>
+            </select>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    async function changeOrderStatus(orderId, newStatus) {
+      if (!confirm(`ต้องการเปลี่ยนสถานะออเดอร์ ${orderId} เป็น "${translateStatus(newStatus)}" ใช่หรือไม่?`)) return;
+
+      try {
+        const response = await callApi('updateOrderStatus', { orderId, status: newStatus });
+        if (!response.success) throw new Error(response.message);
+        showToast('อัปเดตสถานะสำเร็จ');
+        loadDashboardData();
+      } catch (error) {
+        console.error(error);
+        showToast('ไม่สามารถอัปเดตสถานะได้');
+      }
+    }
+
+    function exportToExcel() {
+      if (!allOrders.length) {
+        showToast('ไม่มีข้อมูลสำหรับ Export');
+        return;
+      }
+
+      const excelData = allOrders.map(o => ({
+        'Order ID': o.orderId,
+        'วันที่-เวลา': o.createdAt,
+        'สถานะ': translateStatus(o.status),
+        'ชื่อลูกค้า': o.customerName,
+        'เบอร์โทร': o.phone,
+        'รายการสินค้า': (o.items || []).map(i => `${i.menuName} (${i.variant}, ${i.sweetness}) x ${i.quantity}`).join(', '),
+        'ค่าสินค้า (บาท)': o.itemsSubtotal,
+        'ค่าจัดส่ง (บาท)': o.shippingFee,
+        'ยอดชำระรวม (บาท)': o.grandTotal,
+        'หมายเหตุลูกค้า': o.customerNote || '-'
+      }));
+
+      const worksheet = XLSX.utils.json_to_sheet(excelData);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "MakhamCha_Orders");
+
+      const dateStr = new Date().toISOString().split('T')[0];
+      XLSX.writeFile(workbook, `MakhamCha_SalesReport_${dateStr}.xlsx`);
+      showToast('ดาวน์โหลดรายงาน Excel สำเร็จ');
+    }
+
+    function getStatusBadgeClass(status) {
+      switch (status) {
+        case 'PENDING_PAYMENT': return 'badge-pending';
+        case 'SLIP_UPLOADED': return 'badge-uploaded';
+        case 'PAYMENT_VERIFIED':
+        case 'PREPARING': return 'badge-preparing';
+        case 'OUT_FOR_DELIVERY': return 'badge-delivery';
+        case 'COMPLETED': return 'badge-completed';
+        case 'CANCELLED': return 'badge-cancelled';
+        default: return 'badge-pending';
+      }
+    }
+
+    function translateStatus(status) {
+      switch (status) {
+        case 'PENDING_PAYMENT': return 'รอชำระเงิน';
+        case 'SLIP_UPLOADED': return 'รอตรวจสอบสลิป';
+        case 'PAYMENT_VERIFIED': return 'ชำระแล้ว';
+        case 'PREPARING': return 'กำลังเตรียมเครื่องดื่ม';
+        case 'OUT_FOR_DELIVERY': return 'กำลังจัดส่ง';
+        case 'COMPLETED': return 'สำเร็จแล้ว';
+        case 'CANCELLED': return 'ยกเลิกออเดอร์';
+        default: return status;
+      }
+    }
+
+    async function callApi(action, payload) {
+      const response = await fetch(APP_CONFIG.API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({ action, payload })
+      });
+      return response.json();
+    }
+
+    function showToast(message) {
+      const toast = document.getElementById('toast');
+      toast.textContent = message;
+      toast.classList.remove('hidden');
+      clearTimeout(window.toastTimer);
+      window.toastTimer = setTimeout(() => toast.classList.add('hidden'), 3500);
+    }
+  </script>
+</body>
+</html>
