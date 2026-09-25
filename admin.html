@@ -29,99 +29,128 @@
     .action-select { padding: 6px 10px; border-radius: 8px; border: 1px solid #d4d9d2; background: white; font-size: 13px; }
     .slip-link { color: var(--green); text-decoration: none; font-weight: 600; }
     .slip-link:hover { text-decoration: underline; }
-    .btn-group { display: flex; gap: 8px; }
+    .login-box { max-width: 400px; margin: 60px auto; background: white; padding: 30px; border-radius: 20px; border: 1px solid var(--line); box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
+    .login-box h2 { margin-top: 0; color: var(--dark-green); }
+    .login-box input { width: 100%; padding: 10px 12px; margin-bottom: 15px; border: 1px solid var(--line); border-radius: 10px; box-sizing: border-box; }
   </style>
-  <!-- SheetJS สำหรับสร้างไฟล์ Excel ฝั่ง Client -->
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 </head>
 <body>
-  <header class="header">
-    <div>
-      <p class="brand-subtitle">ADMIN DASHBOARD</p>
-      <h1>Makham Cha ร้านค้า</h1>
-    </div>
-    <div class="btn-group">
-      <button class="primary-btn" onclick="exportToExcel()" style="padding: 10px 14px; font-size: 13px; background: #2f3d2d;">📥 Export Excel</button>
-      <button class="primary-btn" onclick="loadDashboardData()" style="padding: 10px 14px; font-size: 13px;">🔄 รีเฟรช</button>
-    </div>
-  </header>
+  <div id="loadingScreen" class="loading-screen">
+    <div class="spinner"></div>
+    <p>กำลังตรวจสอบสิทธิ์ผู้ดูแล...</p>
+  </div>
 
-  <main class="admin-container">
-    <div class="control-panel">
+  <!-- หน้าล็อกอิน (แสดงเมื่อยังไม่เข้าสู่ระบบ) -->
+  <div id="loginSection" class="admin-container hidden">
+    <div class="login-box">
+      <h2>เข้าสู่ระบบแอดมิน</h2>
+      <p class="small-text">กรุณากรอกรหัสผ่านร้านค้าเพื่อจัดการระบบ</p>
+      <div style="margin-bottom: 15px;">
+        <label class="small-text">LINE Profile ตรวจสอบแล้ว:</label>
+        <div id="loginLineName" style="font-weight:700; color:var(--dark-green);">กำลังโหลด LINE...</div>
+      </div>
+      <form onsubmit="handleLogin(event)">
+        <label>Username</label>
+        <input type="text" id="loginUsername" placeholder="เช่น owner" required />
+        <label>Password</label>
+        <input type="password" id="loginPassword" placeholder="รหัสผ่านแอดมิน" required />
+        <button type="submit" class="primary-btn full-width">เข้าสู่ระบบ</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- หน้า Dashboard หลัก (แสดงหลังล็อกอินผ่าน) -->
+  <div id="dashboardSection" class="hidden">
+    <header class="header">
       <div>
-        <h2 id="storeNameDisplay" style="margin:0 0 4px; font-size:18px;">Makham Cha</h2>
-        <p id="lastUpdateText" class="small-text" style="margin:0;">กำลังโหลดสถานะ...</p>
+        <p class="brand-subtitle">ADMIN DASHBOARD</p>
+        <h1>Makham Cha ร้านค้า</h1>
       </div>
-      <div>
-        <button id="toggleStoreBtn" class="status-toggle-btn" onclick="toggleStoreStatus()">กำลังตรวจสอบ...</button>
+      <div style="display:flex; gap:8px;">
+        <button class="primary-btn" onclick="exportToExcel()" style="padding: 10px 14px; font-size: 13px; background: #2f3d2d;">📥 Export Excel</button>
+        <button class="primary-btn" onclick="loadDashboardData()" style="padding: 10px 14px; font-size: 13px;">🔄 รีเฟรช</button>
+        <button class="primary-btn" onclick="logout()" style="padding: 10px 14px; font-size: 13px; background: #c53030;">ออกจากระบบ</button>
       </div>
-    </div>
+    </header>
 
-    <div class="stats-grid">
-      <div class="stat-card">
-        <p>ออเดอร์ทั้งหมดวันนี้</p>
-        <h3 id="statTotalOrders">0</h3>
+    <main class="admin-container">
+      <div class="control-panel">
+        <div>
+          <h2 style="margin:0 0 4px; font-size:18px;">สถานะร้านค้า</h2>
+          <p id="lastUpdateText" class="small-text" style="margin:0;">กำลังโหลดสถานะ...</p>
+        </div>
+        <div>
+          <button id="toggleStoreBtn" class="status-toggle-btn" onclick="toggleStoreStatus()">กำลังตรวจสอบ...</button>
+        </div>
       </div>
-      <div class="stat-card">
-        <p>ยอดขายรวมวันนี้</p>
-        <h3 id="statTotalSales">฿0</h3>
-      </div>
-      <div class="stat-card">
-        <p>รอตรวจสอบ/เตรียมจัดส่ง</p>
-        <h3 id="statPendingOrders">0</h3>
-      </div>
-    </div>
 
-    <section class="order-table-card">
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; flex-wrap:wrap; gap:10px;">
-        <h2 style="margin:0; font-size:18px;">รายการคำสั่งซื้อล่าสุด</h2>
-        
-        <!-- เพิ่มส่วนนี้สำหรับเลือกกรองวันที่/เดือน/ปี -->
-        <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
-          <select id="filterYear" class="action-select" onchange="filterOrdersTable()">
-            <option value="ALL">ทุกปี</option>
+      <div class="stats-grid">
+        <div class="stat-card">
+          <p>ออเดอร์ทั้งหมดวันนี้</p>
+          <h3 id="statTotalOrders">0</h3>
+        </div>
+        <div class="stat-card">
+          <p>ยอดขายรวมวันนี้</p>
+          <h3 id="statTotalSales">฿0</h3>
+        </div>
+        <div class="stat-card">
+          <p>รอตรวจสอบ/เตรียมจัดส่ง</p>
+          <h3 id="statPendingOrders">0</h3>
+        </div>
+      </div>
+
+      <section class="order-table-card">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; flex-wrap:wrap; gap:10px;">
+          <h2 style="margin:0; font-size:18px;">รายการคำสั่งซื้อ</h2>
+          
+          <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+            <select id="filterYear" class="action-select" onchange="filterOrdersTable()">
+              <option value="ALL">ทุกปี</option>
+            </select>
+            <select id="filterMonth" class="action-select" onchange="filterOrdersTable()">
+              <option value="ALL">ทุกเดือน</option>
+              <option value="01">มกราคม</option>
+              <option value="02">กุมภาพันธ์</option>
+              <option value="03">มีนาคม</option>
+              <option value="04">เมษายน</option>
+              <option value="05">พฤษภาคม</option>
+              <option value="06">มิถุนายน</option>
+              <option value="07">กรกฎาคม</option>
+              <option value="08">สิงหาคม</option>
+              <option value="09">กันยายน</option>
+              <option value="10">ตุลาคม</option>
+              <option value="11">พฤศจิกายน</option>
+              <option value="12">ธันวาคม</option>
+            </select>
+            <input type="date" id="filterDate" class="action-select" onchange="filterOrdersTable()" style="padding: 5px 10px;" />
+            <button class="primary-btn" onclick="resetFilter()" style="padding: 6px 12px; font-size: 12px; background: #718096;">ล้างตัวกรอง</button>
+          </div>
+
+          <select id="filterStatus" class="action-select" onchange="filterOrdersTable()">
+            <option value="ALL">ทุกสถานะ</option>
+            <option value="SLIP_UPLOADED">รอตรวจสอบสลิป</option>
+            <option value="PREPARING">กำลังเตรียมเครื่องดื่ม</option>
+            <option value="OUT_FOR_DELIVERY">กำลังจัดส่ง</option>
+            <option value="COMPLETED">สำเร็จแล้ว</option>
           </select>
-          <select id="filterMonth" class="action-select" onchange="filterOrdersTable()">
-            <option value="ALL">ทุกเดือน</option>
-            <option value="01">มกราคม</option>
-            <option value="02">กุมภาพันธ์</option>
-            <option value="03">มีนาคม</option>
-            <option value="04">เมษายน</option>
-            <option value="05">พฤษภาคม</option>
-            <option value="06">มิถุนายน</option>
-            <option value="07">กรกฎาคม</option>
-            <option value="08">สิงหาคม</option>
-            <option value="09">กันยายน</option>
-            <option value="10">ตุลาคม</option>
-            <option value="11">พฤศจิกายน</option>
-            <option value="12">ธันวาคม</option>
-          </select>
-          <input type="date" id="filterDate" class="action-select" onchange="filterOrdersTable()" style="padding: 5px 10px;" />
-          <button class="primary-btn" onclick="resetFilter()" style="padding: 6px 12px; font-size: 12px; background: #718096;">ล้างตัวกรอง</button>
         </div>
 
-        <select id="filterStatus" class="action-select" onchange="filterOrdersTable()">
-          <option value="ALL">ทุกสถานะ</option>
-          <option value="SLIP_UPLOADED">รอตรวจสอบสลิป</option>
-          <option value="PREPARING">กำลังเตรียมเครื่องดื่ม</option>
-          <option value="OUT_FOR_DELIVERY">กำลังจัดส่ง</option>
-          <option value="COMPLETED">สำเร็จแล้ว</option>
-        </select>
-      </div>
-
-      <div class="order-row order-header-row">
-        <span>Order ID / เวลา</span>
-        <span>ลูกค้า / เบอร์โทร</span>
-        <span>รายการสินค้า</span>
-        <span>ยอดชำระ</span>
-        <span>สถานะ</span>
-        <span>จัดการ / สลิป</span>
-      </div>
-      <div id="ordersListContainer">
-        <p style="text-align:center; color:var(--muted); padding:30px 0;">กำลังโหลดข้อมูลคำสั่งซื้อ...</p>
-      </div>
-    </section>
-  </main>
+        <div class="order-row order-header-row">
+          <span>Order ID / เวลา</span>
+          <span>ลูกค้า / เบอร์โทร</span>
+          <span>รายการสินค้า</span>
+          <span>ยอดชำระ</span>
+          <span>สถานะ</span>
+          <span>จัดการ / สลิป</span>
+        </div>
+        <div id="ordersListContainer">
+          <p style="text-align:center; color:var(--muted); padding:30px 0;">กำลังโหลดข้อมูลคำสั่งซื้อ...</p>
+        </div>
+      </section>
+    </main>
+  </div>
 
   <div id="toast" class="toast hidden"></div>
 
@@ -129,11 +158,66 @@
   <script>
     let allOrders = [];
     let currentStoreIsOpen = true;
+    let userProfile = null;
 
-    document.addEventListener('DOMContentLoaded', () => {
-      loadDashboardData();
-      setInterval(loadDashboardData, 30000);
+    document.addEventListener('DOMContentLoaded', async () => {
+      try {
+        await liff.init({ liffId: APP_CONFIG.ADMIN_LIFF_ID });
+        if (!liff.isLoggedIn()) {
+          liff.login({ redirectUri: window.location.href });
+          return;
+        }
+        userProfile = await liff.getProfile();
+        document.getElementById('loginLineName').textContent = `${userProfile.displayName} (${userProfile.userId})`;
+
+        // ตรวจสอบ Session ที่เคยเข้าสู่ระบบไว้
+        const savedToken = localStorage.getItem('makhamAdminToken');
+        if (savedToken) {
+          document.getElementById('loginSection').classList.add('hidden');
+          document.getElementById('dashboardSection').classList.remove('hidden');
+          loadDashboardData();
+          setInterval(loadDashboardData, 30000);
+        } else {
+          document.getElementById('loginSection').classList.remove('hidden');
+        }
+      } catch (error) {
+        console.error(error);
+        showToast('ไม่สามารถเชื่อมต่อ LINE LIFF ได้');
+      } finally {
+        document.getElementById('loadingScreen').classList.add('hidden');
+      }
     });
+
+    async function handleLogin(event) {
+      event.preventDefault();
+      const username = document.getElementById('loginUsername').value.trim();
+      const password = document.getElementById('loginPassword').value.trim();
+
+      try {
+        const response = await callApi('verifyAdmin', {
+          lineUserId: userProfile.userId,
+          username,
+          password
+        });
+
+        if (!response.success) throw new Error(response.message || 'เข้าสู่ระบบไม่สำเร็จ');
+
+        localStorage.setItem('makhamAdminToken', response.token);
+        document.getElementById('loginSection').classList.add('hidden');
+        document.getElementById('dashboardSection').classList.remove('hidden');
+        
+        showToast('เข้าสู่ระบบสำเร็จ');
+        loadDashboardData();
+        setInterval(loadDashboardData, 30000);
+      } catch (error) {
+        alert(error.message);
+      }
+    }
+
+    function logout() {
+      localStorage.removeItem('makhamAdminToken');
+      location.reload();
+    }
 
     async function loadDashboardData() {
       try {
@@ -145,9 +229,8 @@
 
         allOrders = response.orders || [];
         updateStats(allOrders);
-        initDateFilters(allOrders); // <--- เพิ่มบรรทัดนี้เพื่อให้ตัวเลือกปีดึงข้อมูลจากออเดอร์จริง
-        filterOrdersTable();        // <--- เปลี่ยนจาก renderOrdersTable เป็นตัวนี้
-
+        initDateFilters(allOrders);
+        filterOrdersTable();
 
         document.getElementById('lastUpdateText').textContent = `อัปเดตล่าสุด: ${new Date().toLocaleTimeString('th-TH')}`;
       } catch (error) {
@@ -193,12 +276,10 @@
       document.getElementById('statPendingOrders').textContent = pendingCount;
     }
 
-    // เรียกใช้ตอนโหลดข้อมูลเสร็จ เพื่อสร้างรายชื่อปีใน Dropdown
     function initDateFilters(orders) {
       const yearSelect = document.getElementById('filterYear');
       const years = [...new Set(orders.map(o => String(o.createdAt).substring(0, 4)))].filter(y => y.length === 4);
-      years.sort((a, b) => b - a); // เรียงปีจากใหม่ไปเก่า
-
+      years.sort((a, b) => b - a);
       yearSelect.innerHTML = '<option value="ALL">ทุกปี</option>' + 
         years.map(y => `<option value="${y}">${Number(y) + 543}</option>`).join('');
     }
@@ -207,25 +288,17 @@
       const statusFilter = document.getElementById('filterStatus').value;
       const yearFilter = document.getElementById('filterYear').value;
       const monthFilter = document.getElementById('filterMonth').value;
-      const dateFilter = document.getElementById('filterDate').value; // รูปแบบ YYYY-MM-DD จาก input date
+      const dateFilter = document.getElementById('filterDate').value;
 
       const filtered = allOrders.filter(order => {
-        // order.createdAt คาดว่าเป็นรูปแบบ "YYYY-MM-DD HH:mm:ss" หรือ "YYYY-MM-DD"
         const orderDateStr = String(order.createdAt || '');
         const orderYear = orderDateStr.substring(0, 4);
         const orderMonth = orderDateStr.substring(5, 7);
         const orderDay = orderDateStr.substring(0, 10);
 
-        // เช็คเงื่อนไขสถานะ
         const matchStatus = (statusFilter === 'ALL' || order.status === statusFilter);
-        
-        // เช็คเงื่อนไขปี
         const matchYear = (yearFilter === 'ALL' || orderYear === yearFilter);
-        
-        // เช็คเงื่อนไขเดือน
         const matchMonth = (monthFilter === 'ALL' || orderMonth === monthFilter);
-        
-        // เช็คเงื่อนไขระบุวันเจาะจง
         const matchDate = (!dateFilter || orderDay === dateFilter);
 
         return matchStatus && matchYear && matchMonth && matchDate;
@@ -242,7 +315,6 @@
       filterOrdersTable();
     }
 
-    // เปลี่ยนชื่อจาก renderOrdersTable เดิมเป็นฟังก์ชันนี้
     function renderOrdersList(ordersToRender) {
       const container = document.getElementById('ordersListContainer');
 
